@@ -10,9 +10,6 @@
 #include <cmath>
 #include <iostream>
 
-#include "data_type_converters.hpp"
-
-
 float utils::runPSNRMetric(std::vector<std::vector<float>>& actOutput,
                            std::vector<std::vector<float>>& refOutput,
                            const size_t imgHeight,
@@ -32,8 +29,8 @@ float utils::runPSNRMetric(std::vector<std::vector<float>>& actOutput,
     for (size_t iout = 0; iout < actOutput.size(); ++iout) {
         for (size_t h = scaleBorder; h < imgHeight - scaleBorder; h++) {
             for (size_t w = scaleBorder; w < imgWidth - scaleBorder; w++) {
-                imageDiff = ((actOutput[iout][h * imgWidth + w] - refOutput[iout][h * imgWidth + w]) /
-                             npu::utils::convertValuePrecision<float>(colorScale));
+                imageDiff =
+                    ((actOutput[iout][h * imgWidth + w] - refOutput[iout][h * imgWidth + w]) / static_cast<float>(colorScale));
 
                 sum = sum + (imageDiff * imageDiff);
             }
