@@ -12,6 +12,7 @@ if (NOT DEFINED PROJECT_NAME)
     return()
 endif()
 
+unset(OpenCV_DIR CACHE)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
 #
