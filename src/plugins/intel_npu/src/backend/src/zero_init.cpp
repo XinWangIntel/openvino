@@ -26,11 +26,38 @@ static std::tuple<uint32_t, std::string> queryDriverExtensionVersion(
     // query the extension properties
     const char* graphExtName = nullptr;
     uint32_t targetVersion = 0;
+
+    ze_graph_ext_version_t manualVersion = ZE_GRAPH_EXT_VERSION_CURRENT;
+#if defined(NPU_PLUGIN_DEVELOPER_BUILD)
+    auto adapterManualConfig = std::getenv("ADAPTER_MANUAL_CONFIG");
+    if (adapterManualConfig != nullptr) {
+        if (strcmp(adapterManualConfig, "ze_extension_graph_1_6") == 0) {
+            manualVersion = ZE_GRAPH_EXT_VERSION_1_6;
+        } else if (strcmp(adapterManualConfig, "ze_extension_graph_1_5") == 0) {
+            manualVersion = ZE_GRAPH_EXT_VERSION_1_5;
+        } else if (strcmp(adapterManualConfig, "ze_extension_graph_1_4") == 0) {
+            manualVersion = ZE_GRAPH_EXT_VERSION_1_4;
+        } else if (strcmp(adapterManualConfig, "ze_extension_graph_1_3") == 0) {
+            manualVersion = ZE_GRAPH_EXT_VERSION_1_3;
+        } else if (strcmp(adapterManualConfig, "ze_extension_graph_1_2") == 0) {
+            manualVersion = ZE_GRAPH_EXT_VERSION_1_2;
+        } else {
+            OPENVINO_THROW("Using unsupported ADAPTER_MANUAL_CONFIG!");
+        }
+    }
+#endif
+
     for (uint32_t i = 0; i < count; ++i) {
         auto& property = extProps[i];
 
         if (strncmp(property.name, ZE_GRAPH_EXT_NAME, strlen(ZE_GRAPH_EXT_NAME)) != 0) {
             continue;
+        }
+
+        if(property.version == manualVersion) {
+            graphExtName = property.name;
+            targetVersion = property.version;
+            break;
         }
 
         // If the driver version is latest, will just use its name.
