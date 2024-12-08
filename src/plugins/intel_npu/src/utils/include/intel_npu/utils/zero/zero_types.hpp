@@ -27,8 +27,9 @@ using ze_graph_profiling_dditable_ext_last_t = ze_graph_profiling_dditable_ext_t
  * than required
  */
 struct ze_graph_dditable_ext_decorator final {
-private:
+public:
     ze_graph_dditable_ext_t* const _impl;
+private:
     const uint32_t _driverExtVersion;
 
     ze_graph_dditable_ext_decorator(const ze_graph_dditable_ext_decorator&) = delete;

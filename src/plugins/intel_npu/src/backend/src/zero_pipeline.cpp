@@ -4,6 +4,8 @@
 
 #include "zero_pipeline.hpp"
 
+#include <mlir/ExecutionEngine/MemRefUtils.h>
+#include <mlir/Support/LLVM.h>
 #include <ze_api.h>
 #include <ze_graph_ext.h>
 
@@ -14,6 +16,7 @@
 #include "intel_npu/utils/zero/zero_api.hpp"
 #include "intel_npu/utils/zero/zero_types.hpp"
 #include "zero_remote_tensor.hpp"
+#include "llvm/Support/Error.h"
 
 namespace intel_npu {
 
@@ -23,6 +26,7 @@ Pipeline::Pipeline(const Config& config,
                    const std::vector<std::vector<std::shared_ptr<ov::ITensor>>>& input_tensors,
                    const std::vector<std::shared_ptr<ov::ITensor>>& output_tensors)
     : _graph(graph),
+      _initStructs(initStructs),
       _config(config),
       _id(_graph->get_unique_id()),
       _number_of_command_lists(_graph->get_batch_size().has_value() ? *_graph->get_batch_size() : 1),
@@ -73,6 +77,7 @@ Pipeline::Pipeline(const Config& config,
             _fences.emplace_back(std::make_unique<Fence>(_graph->get_command_queue()));
         }
     }
+    _logger.debug("Pipeline - emplace_back _event_pool and _command_queue completed");
 
     for (size_t i = 0; i < _number_of_command_lists; i++) {
         size_t io_index = 0;
@@ -137,8 +142,9 @@ Pipeline::Pipeline(const Config& config,
             _command_lists.at(i)->appendNpuTimestamp(reinterpret_cast<uint64_t*>(_npu_profiling->npu_ts_infer_start));
         }
 
-        _command_lists.at(i)->appendGraphExecute(static_cast<ze_graph_handle_t>(graph->get_handle()),
-                                                 _profiling_query ? _profiling_query->getHandle() : nullptr);
+        // FIXME(askrebko): commands will added on the fly
+        /* _command_lists.at(i)->appendGraphExecute(static_cast<ze_graph_handle_t>(graph->get_handle()), */
+        /*                                          profiling_query.getHandle()); */
 
         /// append timestamp command if feature was activated
         if (_npu_profiling != nullptr) {
@@ -166,6 +172,7 @@ Pipeline::Pipeline(const Config& config,
 
 void Pipeline::push() {
     _logger.debug("Pipeline - push() started");
+    _logger.debug("Pipeline - push() started");
 
     if (_config.get<RUN_INFERENCES_SEQUENTIALLY>()) {
         if (_id) {
@@ -191,7 +198,50 @@ void Pipeline::push() {
     }
 
     _logger.debug("Pipeline - push() completed");
-};
+}
+
+void Pipeline::push(std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& inputs,
+                    std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& outputs) {
+    _logger.debug("Pipeline - push() started");
+    _logger.debug("inputs.size = %d, outputs.size=%d", inputs.size(), outputs.size());
+    _command_lists.at(0)->reset();
+    void* contextHandlePtr = _initStructs->getContext();
+    void* deviceHandlePtr = _initStructs->getDevice();
+    void* ddiTableHandlePtr = _initStructs->getGraphDdiTable()._impl;
+    void* commandListHandlePtr = _command_lists.at(0)->handle();
+    llvm::Error error =
+        _graph->_engine->invoke("main", &*(inputs[0].get()), &*(outputs[0].get()), contextHandlePtr,
+                deviceHandlePtr, ddiTableHandlePtr, commandListHandlePtr);
+    if (error) {
+        OPENVINO_THROW("Error invoking main: " + llvm::toString(std::move(error)));
+    }
+    _command_lists.at(0)->close();
+
+    if (_config.get<RUN_INFERENCES_SEQUENTIALLY>()) {
+        if (_id) {
+            auto previousIndex = _graph->get_last_submitted_id();
+
+            if (_id != ++previousIndex) {
+                OPENVINO_THROW("Inferences should be called in the same order they were called the first time!");
+            }
+        }
+
+        _graph->set_last_submitted_id(_id);
+    }
+
+    for (size_t i = 0; i < _command_lists.size(); ++i) {
+        _command_lists.at(i)->close();
+
+        OV_ITT_TASK_CHAIN(ZERO_PIPELINE_IP_PUSH, itt::domains::LevelZeroBackend, "Pipeline", "push");
+        if (_sync_output_with_fences) {
+            _graph->get_command_queue()->executeCommandList(*_command_lists.at(i), *_fences.at(i));
+        } else {
+            _graph->get_command_queue()->executeCommandList(*_command_lists.at(i));
+        }
+    }
+
+    _logger.debug("Pipeline - push() completed");
+}
 
 void Pipeline::pull() {
     _logger.debug("Pipeline - pull() started");

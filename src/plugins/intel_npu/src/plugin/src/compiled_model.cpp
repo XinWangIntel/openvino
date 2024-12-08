@@ -58,9 +58,12 @@ CompiledModel::~CompiledModel() {
 std::shared_ptr<ov::IAsyncInferRequest> CompiledModel::create_infer_request() const {
     OV_ITT_SCOPED_TASK(itt::domains::NPUPlugin, "CompiledModel::create_infer_request");
 
+    _logger.debug("CompiledModel::create_infer_request");
     if (!_config.get<CREATE_EXECUTOR>() || _config.get<DEFER_WEIGHTS_LOAD>()) {
+        _logger.info("Graph initialize is deferred from the \"CompiledModel::create_infer_request\" method");
         _graph->initialize(_config);
     }
+    _logger.debug("CompiledModel::create_infer_request - graph initialized");
 
     const std::shared_ptr<SyncInferRequest>& syncInferRequest =
         _device->createInferRequest(shared_from_this(), _config);

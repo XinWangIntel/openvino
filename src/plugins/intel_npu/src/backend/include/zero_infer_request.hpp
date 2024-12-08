@@ -83,8 +83,8 @@ private:
     mutable std::vector<std::vector<std::shared_ptr<ov::ITensor>>> _levelZeroInputTensors;
     mutable std::vector<std::shared_ptr<ov::ITensor>> _levelZeroOutputTensors;
 
-    std::shared_ptr<const zeroMemory::HostMemAllocator> _inputAllocator;
-    std::shared_ptr<const zeroMemory::HostMemAllocator> _outputAllocator;
+    std::shared_ptr<zeroMemory::HostMemAllocator> _inputAllocator;
+    std::shared_ptr<zeroMemory::HostMemAllocator> _outputAllocator;
 
     std::unique_ptr<Pipeline> _pipeline;
 

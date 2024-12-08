@@ -20,7 +20,7 @@ public:
 
     AsyncInferRequest& operator=(const AsyncInferRequest&) = delete;
 
-    ~AsyncInferRequest();
+    ~AsyncInferRequest() override;
 
     std::shared_ptr<SyncInferRequest> get_sync_infer_request() {
         return _syncInferRequest;

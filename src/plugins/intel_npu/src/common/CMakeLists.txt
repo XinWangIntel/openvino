@@ -16,11 +16,33 @@ target_include_directories(${TARGET_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
+list(APPEND CMAKE_PREFIX_PATH $ENV{VPUX_HOME}/build-x86_64/RelWithDebInfo/lib/cmake/mlir)
+find_package(MLIR REQUIRED CONFIG)
+include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${LLVM_INCLUDE_DIRS})
+
 target_link_libraries(${TARGET_NAME}
     PUBLIC
         openvino::npu_al
         openvino::npu_logger_utils
         openvino::npu_zero_utils
+    PRIVATE
+  MLIRAnalysis
+  MLIRBuiltinToLLVMIRTranslation
+  MLIRExecutionEngine
+  MLIRIR
+  MLIRJitRunner
+  MLIRLLVMDialect
+  MLIRLLVMToLLVMIRTranslation
+  MLIRToLLVMIRTranslationRegistration
+  MLIRParser
+  MLIRTargetLLVMIRExport
+  MLIRSupport
+  LLVMSupport
+  LLVMCore
+  LLVMX86CodeGen
+  LLVMX86AsmParser
+  LevelZero::LevelZero
 )
 
 set_target_properties(${TARGET_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ${ENABLE_LTO})
