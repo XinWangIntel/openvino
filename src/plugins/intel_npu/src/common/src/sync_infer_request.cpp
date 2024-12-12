@@ -328,7 +328,7 @@ std::shared_ptr<ov::ITensor> SyncInferRequest::allocate_tensor(const IODescripto
         int64_t w = allocatedTensorShape[3];
         auto init = [=](float& elt, mlir::ArrayRef<int64_t> indices) {
             assert(indices.size() == 4);
-            elt = 1;
+            elt = -1.f;
         };
         int64_t shape[] = {n, c, h, w};
         int64_t shapeAlloc[] = {n, c, h, w};

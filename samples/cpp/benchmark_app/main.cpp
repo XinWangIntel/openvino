@@ -1210,6 +1210,20 @@ int main(int argc, char* argv[]) {
             std::cout << inputTensor.data<float>()[i] << " ";
         }
         std::cout << std::endl;
+        bool passed = true;
+        float ref = 3.f;
+        for (size_t i = 0; i < outputTensor.get_size(); i++) {
+            if (std::abs(outputTensor.data<float>()[i] - ref) > 1e-6) {
+                passed = false;
+                std::cout << "Test failed" << std::endl;
+                std::cout << "Output[" << i << "] = " << outputTensor.data<float>()[i] << std::endl;
+                break;
+            }
+        }
+        if (passed) {
+            std::cout << "Test passed" << std::endl;
+        }
+        std::cout << std::endl;
 
         auto duration_ms = inferRequestsQueue.get_latencies()[0];
         slog::info << "First inference took " << double_to_string(duration_ms) << " ms" << slog::endl;

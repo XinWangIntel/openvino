@@ -209,8 +209,10 @@ void Pipeline::push(std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& 
     void* deviceHandlePtr = _initStructs->getDevice();
     void* ddiTableHandlePtr = _initStructs->getGraphDdiTable()._impl;
     void* commandListHandlePtr = _command_lists.at(0)->handle();
+    mlir::OwningMemRef<float, 4>& input = *inputs[0];
+    mlir::OwningMemRef<float, 4>& output = *outputs[0];
     llvm::Error error =
-        _graph->_engine->invoke("main", &*(inputs[0].get()), &*(outputs[0].get()), contextHandlePtr,
+        _graph->_engine->invoke("main", &*input, &*output, contextHandlePtr,
                 deviceHandlePtr, ddiTableHandlePtr, commandListHandlePtr);
     if (error) {
         OPENVINO_THROW("Error invoking main: " + llvm::toString(std::move(error)));

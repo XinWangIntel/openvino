@@ -857,30 +857,38 @@ LLVMGraph::LLVMGraph(std::vector<uint8_t> blob,
             return std::stoll(env);
         }
 
-        return 180ll;
+        return 60ll;
+    }();
+    int64_t dynamicHeight = [] {
+        const auto env = std::getenv("DYNAMIC_HEIGHT");
+        if (env != nullptr) {
+            return std::stoll(env);
+        }
+
+        return 60ll;
     }();
     /* const int64_t maxDynamicWidth = 1800ll; */
 
     _metadata.inputs = {IODescriptor{"input",
                                      ov::element::f32,
-                                     {1, 3, 60, dynamicWidth},
+                                     {1, 3, dynamicHeight, dynamicWidth},
                                      false,
                                      false,
                                      false,
                                      {},
                                      "input",
                                      {"input"},
-                                     std::optional<ov::PartialShape>({1, 3, 60, dynamicWidth})}};
+                                     std::optional<ov::PartialShape>({1, 3, dynamicHeight, dynamicWidth})}};
     _metadata.outputs = {IODescriptor{"output",
                                       ov::element::f32,
-                                      {1, 3, 60, dynamicWidth},
+                                      {1, 3, dynamicHeight, dynamicWidth},
                                       false,
                                       false,
                                       false,
                                       {},
                                       "output",
                                       {"output"},
-                                      std::optional<ov::PartialShape>({1, 3, 60, dynamicWidth})}};
+                                      std::optional<ov::PartialShape>({1, 3, dynamicHeight, dynamicWidth})}};
     ze_graph_argument_properties_3_t arg3{};
     _input_descriptors = {ArgumentDescriptor{arg3, 0}};
     _output_descriptors = {ArgumentDescriptor{arg3, 1}};
