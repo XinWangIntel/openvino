@@ -66,6 +66,11 @@ if(CMAKE_COMPILE_WARNING_AS_ERROR)
     endif()
 endif()
 
+list(APPEND CMAKE_PREFIX_PATH $ENV{VPUX_HOME}/build-x86_64/RelWithDebInfo/lib/cmake/mlir)
+find_package(MLIR REQUIRED CONFIG)
+include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${LLVM_INCLUDE_DIRS})
+
 add_subdirectory(src)
 
 if(ENABLE_TESTS)
