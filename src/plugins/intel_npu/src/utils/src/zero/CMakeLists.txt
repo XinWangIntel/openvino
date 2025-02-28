@@ -27,6 +27,8 @@ target_include_directories(${TARGET_NAME}
 
 target_link_libraries(${TARGET_NAME} PUBLIC openvino::runtime::dev)
 
+#add_dependencies(${TARGET_NAME} level_zero_wrapper)
+
 #
 # targets install
 #

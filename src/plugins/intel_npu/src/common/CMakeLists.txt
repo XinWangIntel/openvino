@@ -11,25 +11,24 @@ add_library(${TARGET_NAME} STATIC ${SOURCES})
 add_library(openvino::npu_common ALIAS ${TARGET_NAME})
 set_target_properties(${TARGET_NAME} PROPERTIES EXPORT_NAME npu_common)
 
+#get_target_property(headers MLIRExecutionEngine INTERFACE_INCLUDE_DIRECTORIES>)
+#message(STATUS "xin mlir headers ${headers}")
+
 target_include_directories(${TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	#$<TARGET_PROPERTY:MLIRExecutionEngine,INTERFACE_INCLUDE_DIRECTORIES>
 )
-
-#list(APPEND CMAKE_PREFIX_PATH $ENV{VPUX_HOME}/build-x86_64/RelWithDebInfo/lib/cmake/mlir)
-#find_package(MLIR REQUIRED CONFIG)
-#include_directories(${MLIR_INCLUDE_DIRS})
-#include_directories(${LLVM_INCLUDE_DIRS})
 
 target_link_libraries(${TARGET_NAME}
     PUBLIC
         openvino::npu_al
         openvino::npu_logger_utils
         openvino::npu_zero_utils
+        MLIRExecutionEngine
     PRIVATE
   MLIRAnalysis
   MLIRBuiltinToLLVMIRTranslation
-  MLIRExecutionEngine
   MLIRIR
   MLIRJitRunner
   MLIRLLVMDialect
