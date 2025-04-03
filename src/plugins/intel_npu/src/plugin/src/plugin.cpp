@@ -4,6 +4,15 @@
 
 #include "plugin.hpp"
 
+#include <llvm/Support/SourceMgr.h>
+#include <mlir/ExecutionEngine/ExecutionEngine.h>
+#include <mlir/ExecutionEngine/MemRefUtils.h>
+#include <mlir/IR/BuiltinOps.h>
+#include <mlir/Parser/Parser.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Target/LLVMIR/Dialect/All.h>
+
+#include <cstdint>
 #include <fstream>
 
 #include "compiled_model.hpp"
@@ -18,10 +27,15 @@
 #include "intel_npu/config/npuw.hpp"
 #include "intel_npu/config/runtime.hpp"
 #include "intel_npu/utils/zero/zero_init.hpp"
+#include "intel_npu/utils/zero/zero_utils.hpp"
+#include "llvm/Support/InitLLVM.h"
+#include "llvm/Support/TargetSelect.h"
 #include "metadata.hpp"
+#include "mlir/IR/MLIRContext.h"
 #include "npuw/compiled_model.hpp"
 #include "npuw/llm_compiled_model.hpp"
 #include "npuw/serialization.hpp"
+#include "openvino/core/type/element_type.hpp"
 #include "openvino/op/constant.hpp"
 #include "openvino/op/parameter.hpp"
 #include "openvino/runtime/intel_npu/properties.hpp"
@@ -177,6 +191,16 @@ Plugin::Plugin()
       _logger("NPUPlugin", Logger::global().level()) {
     OV_ITT_SCOPED_TASK(itt::domains::NPUPlugin, "Plugin::Plugin");
     set_device_name("NPU");
+
+    //
+    // LLVM initialize
+    //
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    mlir::registerAllToLLVMIRTranslations(_registry);
+    _context = std::make_unique<mlir::MLIRContext>(_registry);
 
     registerCommonOptions(*_options);
     registerCompilerOptions(*_options);
@@ -815,6 +839,133 @@ ov::SoPtr<ov::IRemoteContext> Plugin::get_default_context(const ov::AnyMap&) con
     return std::make_shared<RemoteContextImpl>(_backend, _globalConfig);
 }
 
+LLVMGraph::LLVMGraph(std::vector<uint8_t> blob,
+                     mlir::MLIRContext* context,
+                     const std::shared_ptr<ZeroInitStructsHolder>& zeroInitStruct,
+                     const Config& config)
+    : _blob(std::move(blob)),
+      _zeroInitStruct(zeroInitStruct) {
+    int64_t dynamicWidth = [] {
+        const auto env = std::getenv("DYNAMIC_WIDTH");
+        if (env != nullptr) {
+            return std::stoll(env);
+        }
+
+        return 60ll;
+    }();
+    int64_t dynamicHeight = [] {
+        const auto env = std::getenv("DYNAMIC_HEIGHT");
+        if (env != nullptr) {
+            return std::stoll(env);
+        }
+
+        return 60ll;
+    }();
+    /* const int64_t maxDynamicWidth = 1800ll; */
+
+    _metadata.inputs = {IODescriptor{"input",
+                                     ov::element::f32,
+                                     {1, 3, dynamicHeight, dynamicWidth},
+                                     false,
+                                     false,
+                                     false,
+                                     {},
+                                     "input",
+                                     {"input"},
+                                     std::optional<ov::PartialShape>({1, 3, dynamicHeight, dynamicWidth})}};
+    _metadata.outputs = {IODescriptor{"output",
+                                      ov::element::f32,
+                                      {1, 3, dynamicHeight, dynamicWidth},
+                                      false,
+                                      false,
+                                      false,
+                                      {},
+                                      "output",
+                                      {"output"},
+                                      std::optional<ov::PartialShape>({1, 3, dynamicHeight, dynamicWidth})}};
+    ze_graph_argument_properties_3_t arg3{};
+    _input_descriptors = {ArgumentDescriptor{arg3, 0}};
+    _output_descriptors = {ArgumentDescriptor{arg3, 1}};
+    //
+    // LLVM initialization
+    //
+    llvm::StringRef content(reinterpret_cast<const char*>(_blob.data()), _blob.size());
+    std::cout << "Creating MemoryBuffer " << content.size() << std::endl;
+    auto llvmBlob = llvm::MemoryBuffer::getMemBufferCopy(content, "LLVMBlob");
+    auto sourceMgr = std::make_shared<llvm::SourceMgr>();
+    sourceMgr->AddNewSourceBuffer(std::move(llvmBlob), llvm::SMLoc());
+    mlir::OwningOpRef<mlir::Operation*> module = mlir::parseSourceFile<mlir::ModuleOp>(*sourceMgr, context);
+    if (!module) {
+        OPENVINO_THROW("Failed to parse MLIR module");
+    }
+
+    std::cout << "Creating JITTargetMachineBuilder" << std::endl;
+    auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
+    if (!tmBuilderOrError) {
+        OPENVINO_THROW("Failed to create JITTargetMachineBuilder");
+    }
+    std::cout << "Creating TargetMachine for " << tmBuilderOrError->getCPU() << std::endl;
+    std::cout << "Target triple " << tmBuilderOrError->getTargetTriple().normalize() << std::endl;
+
+    auto tmOrError = tmBuilderOrError->createTargetMachine();
+    if (!tmOrError) {
+        OPENVINO_THROW("Failed to create TargetMachine");
+    }
+    std::cout << "TargetMachine created" << std::endl;
+
+    mlir::ExecutionEngineOptions engineOptions;
+    engineOptions.jitCodeGenOptLevel = llvm::CodeGenOptLevel::None;
+
+    llvm::SmallVector<mlir::StringRef, 4> sharedLibs;
+    sharedLibs.push_back("libmlir_runner_utils.so");
+    sharedLibs.push_back("libmlir_c_runner_utils.so");
+    sharedLibs.push_back("liblevel_zero_wrapper.so");
+    engineOptions.sharedLibPaths = sharedLibs;
+    engineOptions.enableObjectDump = true;
+
+    std::cout << "Creating engine" << std::endl;
+    auto expectedEngine = mlir::ExecutionEngine::create(*module, engineOptions, std::move(tmOrError.get()));
+    if (!expectedEngine) {
+        OPENVINO_THROW("Failed to create execution engine");
+    }
+    std::cout << "Engine created" << std::endl;
+    _engine = std::move(*expectedEngine);
+    auto expectedFPtr = _engine->lookupPacked("main");
+    if (!expectedFPtr) {
+        OPENVINO_THROW("Failed to lookup main function");
+    }
+    initialize(config);
+}
+
+void LLVMGraph::export_blob(std::ostream&) const {}
+
+std::vector<ov::ProfilingInfo> LLVMGraph::process_profiling_output(const std::vector<uint8_t>&, const Config&) const {
+    return {};
+}
+
+void LLVMGraph::set_argument_value(uint32_t argi, const void* argv) const {
+    (void)argi;
+    (void)argv;
+}
+
+void LLVMGraph::initialize(const Config& config) {
+    std::cout << "Initializing LLVMGraph" << std::endl;
+    ze_device_properties_t deviceProperties = {};
+    deviceProperties.stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES;
+    THROW_ON_FAIL_FOR_LEVELZERO("zeDeviceGetProperties",
+                                zeDeviceGetProperties(_zeroInitStruct->getDevice(), &deviceProperties));
+    auto groupOrdinal = zeroUtils::findGroupOrdinal(_zeroInitStruct->getDevice(), deviceProperties);
+
+    bool turbo = false;
+    if (config.has<TURBO>()) {
+        turbo = config.get<TURBO>();
+    }
+    _command_queue = std::make_shared<CommandQueue>(_zeroInitStruct,
+                                                    zeroUtils::toZeQueuePriority(config.get<MODEL_PRIORITY>()),
+                                                    groupOrdinal,
+                                                    turbo);
+}
+
 std::shared_ptr<ov::ICompiledModel> Plugin::import_model(std::istream& stream, const ov::AnyMap& properties) const {
     OV_ITT_SCOPED_TASK(itt::domains::NPUPlugin, "Plugin::import_model");
     OV_ITT_TASK_CHAIN(PLUGIN_IMPORT_MODEL, itt::domains::NPUPlugin, "Plugin::import_model", "merge_configs");
@@ -872,6 +1023,24 @@ std::shared_ptr<ov::ICompiledModel> Plugin::import_model(std::istream& stream, c
     OV_ITT_TASK_NEXT(PLUGIN_IMPORT_MODEL, "parse");
 
     std::shared_ptr<ov::ICompiledModel> compiledModel;
+    if (const auto env = std::getenv("ENABLE_LLVM_BACKEND")) {
+        _logger.warning("Using LLVM backend");
+        (void)env;
+        auto graphSize = getFileSize(stream);
+
+        std::vector<uint8_t> blob(graphSize);
+        stream.read(reinterpret_cast<char*>(blob.data()), graphSize);
+        std::cout << "Successfully read " << graphSize << " bytes into blob." << std::endl;
+        auto zeroBackend = std::dynamic_pointer_cast<ZeroEngineBackend>(_backends->getIEngineBackend()._ptr);
+        auto llvmGraph = std::make_shared<LLVMGraph>(blob, _context.get(), zeroBackend->getInitStruct(), localConfig);
+
+        const std::shared_ptr<ov::Model> modelDummy =
+            create_dummy_model(llvmGraph->get_metadata().inputs, llvmGraph->get_metadata().outputs);
+
+        compiledModel = std::make_shared<CompiledModel>(modelDummy, shared_from_this(), device, llvmGraph, localConfig);
+        return compiledModel;
+    }
+    _logger.warning("Not using LLVM backend");
 
     try {
         CompilerAdapterFactory compilerAdapterFactory;

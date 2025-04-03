@@ -12,6 +12,7 @@
 #include "intel_npu/network_metadata.hpp"
 #include "intel_npu/utils/zero/zero_utils.hpp"
 #include "intel_npu/utils/zero/zero_wrappers.hpp"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "openvino/runtime/profiling_info.hpp"
 
 namespace intel_npu {
@@ -22,6 +23,8 @@ public:
            NetworkMetadata metadata,
            const Config& config,
            std::unique_ptr<BlobContainer> blobPtr);
+
+    IGraph() = default;
 
     virtual size_t export_blob(std::ostream& stream) const = 0;
 
@@ -103,6 +106,9 @@ protected:
     std::optional<std::size_t> _batch_size = std::nullopt;
 
     Logger _logger;
+
+public:
+    std::unique_ptr<mlir::ExecutionEngine> _engine;
 };
 
 }  // namespace intel_npu

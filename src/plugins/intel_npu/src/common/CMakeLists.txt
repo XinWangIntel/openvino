@@ -11,9 +11,13 @@ add_library(${TARGET_NAME} STATIC ${SOURCES})
 add_library(openvino::npu_common ALIAS ${TARGET_NAME})
 set_target_properties(${TARGET_NAME} PROPERTIES EXPORT_NAME npu_common)
 
+#get_target_property(headers MLIRExecutionEngine INTERFACE_INCLUDE_DIRECTORIES>)
+#message(STATUS "xin mlir headers ${headers}")
+
 target_include_directories(${TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	#$<TARGET_PROPERTY:MLIRExecutionEngine,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_link_libraries(${TARGET_NAME}
@@ -21,6 +25,23 @@ target_link_libraries(${TARGET_NAME}
         openvino::npu_al
         openvino::npu_logger_utils
         openvino::npu_zero_utils
+        MLIRExecutionEngine
+    PRIVATE
+  MLIRAnalysis
+  MLIRBuiltinToLLVMIRTranslation
+  MLIRIR
+  MLIRJitRunner
+  MLIRLLVMDialect
+  MLIRLLVMToLLVMIRTranslation
+  MLIRToLLVMIRTranslationRegistration
+  MLIRParser
+  MLIRTargetLLVMIRExport
+  MLIRSupport
+  LLVMSupport
+  LLVMCore
+  LLVMX86CodeGen
+  LLVMX86AsmParser
+  LevelZero::LevelZero
 )
 
 set_target_properties(${TARGET_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ${ENABLE_LTO})

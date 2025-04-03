@@ -4,19 +4,42 @@
 
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
 
 #include "backends_registry.hpp"
+#include "intel_npu/common/igraph.hpp"
 #include "intel_npu/common/npu.hpp"
 #include "intel_npu/config/config.hpp"
 #include "intel_npu/utils/logger/logger.hpp"
 #include "metrics.hpp"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+#include "mlir/IR/DialectRegistry.h"
 #include "openvino/runtime/iplugin.hpp"
 #include "openvino/runtime/so_ptr.hpp"
 
 namespace intel_npu {
+class LLVMGraph : public intel_npu::IGraph {
+public:
+    LLVMGraph(std::vector<uint8_t> blob,
+              mlir::MLIRContext* context,
+              const std::shared_ptr<ZeroInitStructsHolder>& zeroInitStruct,
+              const Config& config);
+
+    void export_blob(std::ostream&) const override;
+
+    std::vector<ov::ProfilingInfo> process_profiling_output(const std::vector<uint8_t>&, const Config&) const override;
+
+    void set_argument_value(uint32_t argi, const void* argv) const override;
+
+    void initialize(const Config& config) override;
+
+private:
+    std::vector<uint8_t> _blob;
+    std::shared_ptr<ZeroInitStructsHolder> _zeroInitStruct;
+};
 
 class Plugin : public ov::IPlugin {
 public:
@@ -26,7 +49,7 @@ public:
 
     Plugin& operator=(const Plugin&) = delete;
 
-    virtual ~Plugin() = default;
+    ~Plugin() override = default;
 
     void set_property(const ov::AnyMap& properties) override;
 
@@ -71,6 +94,9 @@ private:
     mutable std::vector<ov::PropertyName> _supportedProperties;
 
     static std::atomic<int> _compiledModelLoadCounter;
+
+    mlir::DialectRegistry _registry;
+    std::unique_ptr<mlir::MLIRContext> _context;
 
     void reset_compiler_dependent_properties() const;
     void reset_supported_properties() const;

@@ -4,6 +4,11 @@
 
 #pragma once
 
+#include <mlir/ExecutionEngine/MemRefUtils.h>
+#include <ze_api.h>
+
+#include <cstdint>
+
 #include "intel_npu/common/icompiled_model.hpp"
 #include "intel_npu/common/igraph.hpp"
 #include "intel_npu/common/variable_state.hpp"
@@ -161,7 +166,8 @@ protected:
                                                  const size_t index,
                                                  const bool isInput,
                                                  const ov::Allocator& allocator = {},
-                                                 const std::optional<std::size_t> batchSize = std::nullopt) const;
+                                                 const std::optional<std::size_t> batchSize = std::nullopt,
+                                                 ze_context_handle_t context = nullptr) const;
 
     virtual std::shared_ptr<ov::ITensor> create_tensor(ov::element::Type type,
                                                        const ov::Shape& shape,
@@ -197,6 +203,11 @@ protected:
      * @see ov::ISyncInferRequest
      */
     mutable std::mutex _cacheMutex;
+    //
+    // LLVM Integration related fields
+    //
+    mutable std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>> _inputMemRefs;
+    mutable std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>> _outputMemRefs;
 };
 
 }  // namespace intel_npu

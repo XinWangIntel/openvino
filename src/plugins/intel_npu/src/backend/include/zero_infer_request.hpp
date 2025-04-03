@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <mlir/ExecutionEngine/MemRefUtils.h>
 #include <ze_api.h>
 #include <ze_graph_ext.h>
 
@@ -85,8 +86,8 @@ private:
     mutable std::vector<std::vector<std::shared_ptr<ov::ITensor>>> _levelZeroInputTensors;
     mutable std::vector<std::shared_ptr<ov::ITensor>> _levelZeroOutputTensors;
 
-    std::shared_ptr<const zeroMemory::HostMemAllocator> _inputAllocator;
-    std::shared_ptr<const zeroMemory::HostMemAllocator> _outputAllocator;
+    std::shared_ptr<zeroMemory::HostMemAllocator> _inputAllocator;
+    std::shared_ptr<zeroMemory::HostMemAllocator> _outputAllocator;
 
     zeroProfiling::ProfilingPool _profilingPool;
     zeroProfiling::ProfilingQuery _profilingQuery;

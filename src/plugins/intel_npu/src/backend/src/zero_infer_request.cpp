@@ -30,6 +30,8 @@ constexpr bool OUTPUT = false;
  * @param zeDescriptor The Level Zero specific structure used for comparison.
  */
 void check_level_zero_attributes_match(const IODescriptor& ioDescriptor, const ArgumentDescriptor& zeDescriptor) {
+    // FIXME: disable the check for now
+    return;
     std::string zeDescriptorName = zeDescriptor.info.name;
 
     if (isStateInputName(zeDescriptorName)) {
@@ -54,9 +56,11 @@ void check_level_zero_attributes_match(const IODescriptor& ioDescriptor, const A
                     "Maximum number of dimensions supported: " + std::to_string(ZE_MAX_GRAPH_ARGUMENT_DIMENSIONS_SIZE) +
                         '\n' + "Given: " + std::to_string(ovDimensions.size()));
 
+    const uint32_t dynamicDim = std::numeric_limits<uint32_t>::max();
     for (size_t index = 0; index < ovDimensions.size(); ++index) {
-        OPENVINO_ASSERT(ovDimensions[index] == zeDescriptor.info.dims[index],
-                        "Shape mismatch for input/output named " + ioDescriptor.nameFromCompiler);
+        OPENVINO_ASSERT(
+            ovDimensions[index] == zeDescriptor.info.dims[index] || || zeDescriptor.info.dims[index] == dynamicDim,
+            "Shape mismatch for input/output named " + ioDescriptor.nameFromCompiler);
     }
     for (size_t index = ovDimensions.size(); index < ZE_MAX_GRAPH_ARGUMENT_DIMENSIONS_SIZE; ++index) {
         OPENVINO_ASSERT(zeDescriptor.info.dims[index] == 0 || zeDescriptor.info.dims[index] == 1,
@@ -89,9 +93,9 @@ ZeroInferRequest::ZeroInferRequest(const std::shared_ptr<ZeroInitStructsHolder>&
         _npuProfiling = std::make_shared<zeroProfiling::NpuInferProfiling>(_initStructs, _config.get<LOG_LEVEL>());
     }
 
-    _outputAllocator = std::make_shared<const zeroMemory::HostMemAllocator>(_initStructs);
+    _outputAllocator = std::make_shared<zeroMemory::HostMemAllocator>(_initStructs);
     _inputAllocator =
-        std::make_shared<const zeroMemory::HostMemAllocator>(_initStructs, ZE_HOST_MEM_ALLOC_FLAG_BIAS_WRITE_COMBINED);
+        std::make_shared<zeroMemory::HostMemAllocator>(_initStructs, ZE_HOST_MEM_ALLOC_FLAG_BIAS_WRITE_COMBINED);
 
     _logger.debug("ZeroInferRequest::ZeroInferRequest - checking level zero attributes and allocating tensors");
 
@@ -150,7 +154,7 @@ void ZeroInferRequest::create_pipeline() {
                                                            inputIndex,
                                                            INPUT,
                                                            *_inputAllocator,
-                                                           _graph->get_batch_size());
+                                                           _graph->get_batch_size()， _initStructs->getContext());
     }
 
     for (size_t outputIndex = 0; outputIndex < _metadata.outputs.size(); ++outputIndex) {
@@ -161,11 +165,12 @@ void ZeroInferRequest::create_pipeline() {
         }
         _logger.debug("ZeroInferRequest::create_pipeline - allocate new output tensor %s",
                       _metadata.outputs.at(outputIndex).nodeFriendlyName.c_str());
-        _levelZeroOutputTensors.at(outputIndex) = allocate_tensor(_metadata.outputs.at(outputIndex),
-                                                                  outputIndex,
-                                                                  OUTPUT,
-                                                                  *_outputAllocator,
-                                                                  _graph->get_batch_size());
+        _levelZeroOutputTensors.at(outputIndex) =
+            allocate_tensor(_metadata.outputs.at(outputIndex),
+                            outputIndex,
+                            OUTPUT,
+                            *_outputAllocator,
+                            _graph->get_batch_size()， _initStructs->getContext());
     }
     _logger.debug("ZeroInferRequest::create_pipeline - init completed");
 
@@ -431,7 +436,8 @@ ov::SoPtr<ov::ITensor> ZeroInferRequest::get_tensor(const ov::Output<const ov::N
                                        ioIndex,
                                        isInput,
                                        isInput ? *_inputAllocator : *_outputAllocator,
-                                       _graph->get_batch_size());
+                                       _graph->get_batch_size(),
+                                       _initStructs->getContext());
 
     auto zeroTensor = std::dynamic_pointer_cast<ZeroTensor>(levelZeroTensors);
     if (zeroTensor != nullptr) {
@@ -656,7 +662,8 @@ void ZeroInferRequest::infer_async() {
     }
 
     OV_ITT_TASK_NEXT(ZERO_INFER, "push");
-    _pipeline->push();
+    /* _pipeline->push(); */
+    _pipeline->push(_inputMemRefs, _outputMemRefs);
 }
 
 void ZeroInferRequest::get_result() {

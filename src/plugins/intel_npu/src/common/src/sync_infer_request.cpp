@@ -4,12 +4,16 @@
 
 #include "intel_npu/common/sync_infer_request.hpp"
 
+#include <cstdint>
+#include <memory>
+
 #include "intel_npu/prefix.hpp"
 #include "openvino/op/util/op_types.hpp"
 #include "openvino/runtime/make_tensor.hpp"
 #include "openvino/runtime/plugin_itt.hpp"
 #include "openvino/util/common_util.hpp"
 #include "transformations/utils/utils.hpp"
+#include "ze_api.h"
 
 namespace {
 
@@ -298,7 +302,8 @@ std::shared_ptr<ov::ITensor> SyncInferRequest::allocate_tensor(const IODescripto
                                                                const size_t index,
                                                                const bool isInput,
                                                                const ov::Allocator& allocator,
-                                                               const std::optional<std::size_t> batchSize) const {
+                                                               const std::optional<std::size_t> batchSize,
+                                                               ze_context_handle_t context) const {
     check_network_precision(descriptor.precision);
 
     std::shared_ptr<ov::ITensor> tensor;
@@ -316,6 +321,67 @@ std::shared_ptr<ov::ITensor> SyncInferRequest::allocate_tensor(const IODescripto
                         "The link between state descriptors is missing, state name: ",
                         descriptor.nameFromCompiler);
         tensor = get_user_input(*descriptor.relatedDescriptorIndex)._ptr;
+    } else if (const auto env = std::getenv("ENABLE_LLVM_BACKEND") && context) {
+        int64_t n = allocatedTensorShape[0];
+        int64_t c = allocatedTensorShape[1];
+        int64_t h = allocatedTensorShape[2];
+        int64_t w = allocatedTensorShape[3];
+        auto init = [=](float& elt, mlir::ArrayRef<int64_t> indices) {
+            assert(indices.size() == 4);
+            elt = -1.f;
+        };
+        int64_t shape[] = {n, c, h, w};
+        int64_t shapeAlloc[] = {n, c, h, w};
+        auto allocOutput = [&](size_t size) -> void* {
+            size_t _alignment = 4096;
+            ze_host_mem_alloc_flag_t _flag = {};
+            size_t alingedSize = size + _alignment - (size % _alignment);
+            ze_host_mem_alloc_desc_t desc = {ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC,
+                                             nullptr,
+                                             static_cast<ze_host_mem_alloc_flags_t>(_flag)};
+            void* data = nullptr;
+            ze_result_t res = zeMemAllocHost(context, &desc, alingedSize, _alignment, &data);
+            if (res != ZE_RESULT_SUCCESS) {
+                _logger.error("Failed to allocate memory for the LLVM backend");
+                return nullptr;
+            }
+
+            return data;
+        };
+        auto allocInput = [&](size_t size) -> void* {
+            size_t _alignment = 4096;
+            ze_host_mem_alloc_flag_t _flag = ZE_HOST_MEM_ALLOC_FLAG_BIAS_WRITE_COMBINED;
+            size_t alingedSize = size + _alignment - (size % _alignment);
+            ze_host_mem_alloc_desc_t desc = {ZE_STRUCTURE_TYPE_HOST_MEM_ALLOC_DESC,
+                                             nullptr,
+                                             static_cast<ze_host_mem_alloc_flags_t>(_flag)};
+            void* data = nullptr;
+            ze_result_t res = zeMemAllocHost(context, &desc, alingedSize, _alignment, &data);
+            if (res != ZE_RESULT_SUCCESS) {
+                _logger.error("Failed to allocate memory for the LLVM backend");
+                return nullptr;
+            }
+
+            return data;
+        };
+        float* ptr = [&]() -> float* {
+            if (isInput) {
+                _inputMemRefs.emplace_back(std::make_unique<mlir::OwningMemRef<float, 4>>(shape,
+                                                                                          shapeAlloc,
+                                                                                          init,
+                                                                                          std::optional<uint64_t>(),
+                                                                                          allocInput));
+                return (*_inputMemRefs[0].get())->data;
+            } else {
+                _outputMemRefs.emplace_back(std::make_unique<mlir::OwningMemRef<float, 4>>(shape,
+                                                                                           shapeAlloc,
+                                                                                           init,
+                                                                                           std::optional<uint64_t>(),
+                                                                                           allocOutput));
+                return (*_outputMemRefs[0].get())->data;
+            }
+        }();
+        tensor = ov::make_tensor(descriptor.precision, allocatedTensorShape, ptr);
     } else {
         tensor = create_tensor(descriptor.precision, allocatedTensorShape, allocator);
     }
@@ -342,7 +408,7 @@ std::shared_ptr<ov::ITensor> SyncInferRequest::create_tensor(ov::element::Type t
 }
 
 void SyncInferRequest::add_state(const IODescriptor& descriptor, const size_t tensorIndex) const {
-    _variableStates.push_back(
+    _variableStates.emplace_back(
         std::make_shared<VariableState>(descriptor.nameFromCompiler, get_user_input(tensorIndex)));
 }
 

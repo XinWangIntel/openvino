@@ -4,6 +4,8 @@
 
 #include "zero_pipeline.hpp"
 
+#include <mlir/ExecutionEngine/MemRefUtils.h>
+#include <mlir/Support/LLVM.h>
 #include <ze_api.h>
 #include <ze_graph_ext.h>
 
@@ -13,6 +15,7 @@
 #include "intel_npu/utils/logger/logger.hpp"
 #include "intel_npu/utils/zero/zero_api.hpp"
 #include "intel_npu/utils/zero/zero_types.hpp"
+#include "llvm/Support/Error.h"
 #include "zero_remote_tensor.hpp"
 
 namespace intel_npu {
@@ -30,7 +33,9 @@ Pipeline::Pipeline(const Config& config,
       _id(_graph->get_unique_id()),
       _number_of_command_lists(_graph->get_batch_size().has_value() ? *_graph->get_batch_size() : 1),
       _npu_profiling(npu_profiling),
-      _logger("Pipeline", _config.get<LOG_LEVEL>()) {
+      _logger("Pipeline", _config.get<LOG_LEVEL>()),
+      _graph(graph),
+      _initStructs(initStructs) {
     OV_ITT_SCOPED_TASK(itt::domains::LevelZeroBackend, "Zero_infer_request::Pipeline::Pipeline");
     _logger.debug("Pipeline - initialize started");
 
@@ -52,6 +57,7 @@ Pipeline::Pipeline(const Config& config,
             _events.emplace_back(std::make_shared<Event>(_event_pool, static_cast<uint32_t>(i)));
         }
     }
+    _logger.debug("Pipeline - emplace_back _event_pool and _command_queue completed");
 
     _command_lists.reserve(_number_of_command_lists);
     for (size_t i = 0; i < _number_of_command_lists; i++) {
@@ -130,8 +136,9 @@ Pipeline::Pipeline(const Config& config,
             _command_lists.at(i)->appendNpuTimestamp(reinterpret_cast<uint64_t*>(_npu_profiling->npu_ts_infer_start));
         }
 
-        _command_lists.at(i)->appendGraphExecute(static_cast<ze_graph_handle_t>(graph->get_handle()),
-                                                 profiling_query.getHandle());
+        // FIXME(askrebko): commands will added on the fly
+        /* _command_lists.at(i)->appendGraphExecute(static_cast<ze_graph_handle_t>(graph->get_handle()), */
+        /*                                          profiling_query.getHandle()); */
 
         /// append timestamp command if feature was activated
         if (_npu_profiling != nullptr) {
@@ -153,13 +160,48 @@ Pipeline::Pipeline(const Config& config,
             _command_lists.at(i)->appendBarrier();
             _events.at(i)->AppendSignalEvent(*_command_lists.at(i));
         }
-        _command_lists.at(i)->close();
+        // FIXME(askrebko): commands will added on the fly
+        /* _command_lists.at(i)->close(); */
     }
     _logger.debug("Pipeline - initialize completed");
 }
 
 void Pipeline::push() {
     _logger.debug("Pipeline - push() started");
+    for (size_t i = 0; i < _command_lists.size(); ++i) {
+        OV_ITT_TASK_CHAIN(ZERO_PIPELINE_IP_PUSH, itt::domains::LevelZeroBackend, "Pipeline", "push");
+        if (sync_output_with_fences_) {
+            _command_queue->executeCommandList(*_command_lists.at(i), *_fences.at(i));
+        } else {
+            _command_queue->executeCommandList(*_command_lists.at(i));
+        }
+    }
+
+    _logger.debug("Pipeline - push() completed");
+}
+
+void Pipeline::push(std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& inputs,
+                    std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& outputs) {
+    _logger.debug("Pipeline - push() started");
+    _logger.debug("inputs.size = %d, outputs.size=%d", inputs.size(), outputs.size());
+    _command_lists.at(0)->reset();
+    void* contextHandlePtr = _initStructs->getContext();
+    void* deviceHandlePtr = _initStructs->getDevice();
+    void* ddiTableHandlePtr = _initStructs->getGraphDdiTable()._impl;
+    void* commandListHandlePtr = _command_lists.at(0)->handle();
+    mlir::OwningMemRef<float, 4>& input = *inputs[0];
+    mlir::OwningMemRef<float, 4>& output = *outputs[0];
+    llvm::Error error = _graph->_engine->invoke("main",
+                                                &*input,
+                                                &*output,
+                                                contextHandlePtr,
+                                                deviceHandlePtr,
+                                                ddiTableHandlePtr,
+                                                commandListHandlePtr);
+    if (error) {
+        OPENVINO_THROW("Error invoking main: " + llvm::toString(std::move(error)));
+    }
+    _command_lists.at(0)->close();
 
     if (_config.get<RUN_INFERENCES_SEQUENTIALLY>()) {
         if (_id) {
@@ -183,7 +225,7 @@ void Pipeline::push() {
     }
 
     _logger.debug("Pipeline - push() completed");
-};
+}
 
 void Pipeline::pull() {
     _logger.debug("Pipeline - pull() started");

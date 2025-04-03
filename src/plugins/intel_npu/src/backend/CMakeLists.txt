@@ -25,6 +25,21 @@ target_link_libraries(${TARGET_NAME}
     PRIVATE
         openvino::npu_al
         openvino::npu_common
+        MLIRAnalysis
+        MLIRBuiltinToLLVMIRTranslation
+        MLIRExecutionEngine
+        MLIRIR
+        MLIRJitRunner
+        MLIRLLVMDialect
+        MLIRLLVMToLLVMIRTranslation
+        MLIRToLLVMIRTranslationRegistration
+        MLIRParser
+        MLIRTargetLLVMIRExport
+        MLIRSupport
+        LLVMSupport
+        LLVMCore
+        LLVMX86CodeGen
+        LLVMX86AsmParser
 )
 
 #

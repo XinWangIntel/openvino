@@ -26,7 +26,33 @@ target_link_libraries(${TARGET_NAME}
     PRIVATE
         openvino_npu_driver_compiler_adapter
         openvino_npu_level_zero_backend
+    PRIVATE
+  MLIRAnalysis
+  MLIRBuiltinToLLVMIRTranslation
+  MLIRExecutionEngine
+  MLIRIR
+  MLIRJitRunner
+  MLIRLLVMDialect
+  MLIRLLVMToLLVMIRTranslation
+  MLIRToLLVMIRTranslationRegistration
+  MLIRParser
+  MLIRTargetLLVMIRExport
+  MLIRSupport
+  LLVMSupport
+  LLVMCore
+  LLVMX86CodeGen
+  LLVMX86AsmParser
 )
+message(STATUS "MLIR_LIBS: ${MLIR_LIBS}")
+#get_target_property(MLIRExecutionEngine_INCLUDE_DIRS MLIRExecutionEngine INCLUDE_DIRECTORIES)
+#get_target_property(MLIRJitRunner_INCLUDE_DIRS MLIRJitRunner INCLUDE_DIRECTORIES)
+#message(STATUS "MLIRExecutionEngine includes ${MLIRExecutionEngine_INCLUDE_DIRS}")
+#message(STATUS "MLIRJitRunner includes ${MLIRJitRunner_INCLUDE_DIRS}")
+if (TARGET MLIRExecutionEngine)
+    message(STATUS "MLIRExecutionEngine exists")
+#else()
+    #message(STATUS "MLIRExecutionEngine does not exist")
+endif()
 
 if(ENABLE_IMD_BACKEND)
     target_compile_definitions(${TARGET_NAME} PRIVATE ENABLE_IMD_BACKEND)

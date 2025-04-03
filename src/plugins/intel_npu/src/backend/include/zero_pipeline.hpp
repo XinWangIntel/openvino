@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <mlir/ExecutionEngine/MemRefUtils.h>
+
 #include "intel_npu/common/igraph.hpp"
 #include "intel_npu/utils/zero/zero_utils.hpp"
 #include "intel_npu/utils/zero/zero_wrappers.hpp"
@@ -29,6 +31,8 @@ public:
     virtual ~Pipeline() = default;
 
     void push();
+    void push(std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& inputs,
+              std::vector<std::unique_ptr<mlir::OwningMemRef<float, 4>>>& outputs);
     void pull();
     void reset() const;
 
@@ -61,6 +65,8 @@ protected:
     bool _sync_output_with_fences = true;
     std::shared_ptr<zeroProfiling::NpuInferProfiling> _npu_profiling;
     Logger _logger;
+    std::shared_ptr<IGraph> _graph;
+    std::shared_ptr<ZeroInitStructsHolder> _initStructs;
 };
 
 }  // namespace intel_npu
