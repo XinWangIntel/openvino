@@ -16,8 +16,6 @@ target_include_directories(${TARGET_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-add_dependencies(${TARGET_NAME} LLVMSupport)
-
 if(ENABLE_MLIR_COMPILER)
     target_compile_definitions(${TARGET_NAME} PRIVATE ENABLE_MLIR_COMPILER)
 endif()

@@ -22,6 +22,11 @@ ov_add_plugin(NAME ${NPU_PLUGIN_TARGET}
 set_target_properties(${TARGET_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ${ENABLE_LTO})
 ov_add_clang_format_target(${TARGET_NAME}_clang FOR_TARGETS ${TARGET_NAME})
 
+list(APPEND CMAKE_PREFIX_PATH $ENV{VPUX_HOME}/build-x86_64/RelWithDebInfo/lib/cmake/mlir)
+find_package(MLIR REQUIRED CONFIG)
+include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${LLVM_INCLUDE_DIRS})
+
 target_link_libraries(${TARGET_NAME}
     PRIVATE
         openvino_npu_driver_compiler_adapter
@@ -44,14 +49,14 @@ target_link_libraries(${TARGET_NAME}
   LLVMX86AsmParser
 )
 message(STATUS "MLIR_LIBS: ${MLIR_LIBS}")
-#get_target_property(MLIRExecutionEngine_INCLUDE_DIRS MLIRExecutionEngine INCLUDE_DIRECTORIES)
-#get_target_property(MLIRJitRunner_INCLUDE_DIRS MLIRJitRunner INCLUDE_DIRECTORIES)
-#message(STATUS "MLIRExecutionEngine includes ${MLIRExecutionEngine_INCLUDE_DIRS}")
-#message(STATUS "MLIRJitRunner includes ${MLIRJitRunner_INCLUDE_DIRS}")
+get_target_property(MLIRExecutionEngine_INCLUDE_DIRS MLIRExecutionEngine INCLUDE_DIRECTORIES)
+get_target_property(MLIRJitRunner_INCLUDE_DIRS MLIRJitRunner INCLUDE_DIRECTORIES)
+message(STATUS "MLIRExecutionEngine includes ${MLIRExecutionEngine_INCLUDE_DIRS}")
+message(STATUS "MLIRJitRunner includes ${MLIRJitRunner_INCLUDE_DIRS}")
 if (TARGET MLIRExecutionEngine)
     message(STATUS "MLIRExecutionEngine exists")
-#else()
-    #message(STATUS "MLIRExecutionEngine does not exist")
+else()
+    message(STATUS "MLIRExecutionEngine does not exist")
 endif()
 
 if(ENABLE_IMD_BACKEND)
