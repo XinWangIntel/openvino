@@ -34,8 +34,7 @@ Pipeline::Pipeline(const Config& config,
       _number_of_command_lists(_graph->get_batch_size().has_value() ? *_graph->get_batch_size() : 1),
       _npu_profiling(npu_profiling),
       _logger("Pipeline", _config.get<LOG_LEVEL>()),
-      _graph(graph),
-      _initStructs(initStructs) {
+      _initStructs(init_structs) {
     OV_ITT_SCOPED_TASK(itt::domains::LevelZeroBackend, "Zero_infer_request::Pipeline::Pipeline");
     _logger.debug("Pipeline - initialize started");
 
@@ -170,7 +169,7 @@ void Pipeline::push() {
     _logger.debug("Pipeline - push() started");
     for (size_t i = 0; i < _command_lists.size(); ++i) {
         OV_ITT_TASK_CHAIN(ZERO_PIPELINE_IP_PUSH, itt::domains::LevelZeroBackend, "Pipeline", "push");
-        if (sync_output_with_fences_) {
+        if (_sync_output_with_fences) {
             _command_queue->executeCommandList(*_command_lists.at(i), *_fences.at(i));
         } else {
             _command_queue->executeCommandList(*_command_lists.at(i));

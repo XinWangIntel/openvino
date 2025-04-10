@@ -59,7 +59,7 @@ void check_level_zero_attributes_match(const IODescriptor& ioDescriptor, const A
     const uint32_t dynamicDim = std::numeric_limits<uint32_t>::max();
     for (size_t index = 0; index < ovDimensions.size(); ++index) {
         OPENVINO_ASSERT(
-            ovDimensions[index] == zeDescriptor.info.dims[index] || || zeDescriptor.info.dims[index] == dynamicDim,
+            ovDimensions[index] == zeDescriptor.info.dims[index] || zeDescriptor.info.dims[index] == dynamicDim,
             "Shape mismatch for input/output named " + ioDescriptor.nameFromCompiler);
     }
     for (size_t index = ovDimensions.size(); index < ZE_MAX_GRAPH_ARGUMENT_DIMENSIONS_SIZE; ++index) {
@@ -154,7 +154,7 @@ void ZeroInferRequest::create_pipeline() {
                                                            inputIndex,
                                                            INPUT,
                                                            *_inputAllocator,
-                                                           _graph->get_batch_size()， _initStructs->getContext());
+                                                           _graph->get_batch_size(),_initStructs->getContext());
     }
 
     for (size_t outputIndex = 0; outputIndex < _metadata.outputs.size(); ++outputIndex) {
@@ -170,7 +170,7 @@ void ZeroInferRequest::create_pipeline() {
                             outputIndex,
                             OUTPUT,
                             *_outputAllocator,
-                            _graph->get_batch_size()， _initStructs->getContext());
+                            _graph->get_batch_size(), _initStructs->getContext());
     }
     _logger.debug("ZeroInferRequest::create_pipeline - init completed");
 

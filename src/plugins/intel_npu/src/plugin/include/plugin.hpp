@@ -28,7 +28,7 @@ public:
               const std::shared_ptr<ZeroInitStructsHolder>& zeroInitStruct,
               const Config& config);
 
-    void export_blob(std::ostream&) const override;
+    size_t export_blob(std::ostream&) const override;
 
     std::vector<ov::ProfilingInfo> process_profiling_output(const std::vector<uint8_t>&, const Config&) const override;
 

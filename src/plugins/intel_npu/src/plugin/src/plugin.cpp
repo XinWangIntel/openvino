@@ -843,7 +843,8 @@ LLVMGraph::LLVMGraph(std::vector<uint8_t> blob,
                      mlir::MLIRContext* context,
                      const std::shared_ptr<ZeroInitStructsHolder>& zeroInitStruct,
                      const Config& config)
-    : _blob(std::move(blob)),
+    : IGraph(nullptr, NetworkMetadata(), config, nullptr),
+      _blob(std::move(blob)),
       _zeroInitStruct(zeroInitStruct) {
     int64_t dynamicWidth = [] {
         const auto env = std::getenv("DYNAMIC_WIDTH");
@@ -937,7 +938,7 @@ LLVMGraph::LLVMGraph(std::vector<uint8_t> blob,
     initialize(config);
 }
 
-void LLVMGraph::export_blob(std::ostream&) const {}
+size_t LLVMGraph::export_blob(std::ostream&) const { return 0; }
 
 std::vector<ov::ProfilingInfo> LLVMGraph::process_profiling_output(const std::vector<uint8_t>&, const Config&) const {
     return {};
@@ -954,7 +955,8 @@ void LLVMGraph::initialize(const Config& config) {
     deviceProperties.stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES;
     THROW_ON_FAIL_FOR_LEVELZERO("zeDeviceGetProperties",
                                 zeDeviceGetProperties(_zeroInitStruct->getDevice(), &deviceProperties));
-    auto groupOrdinal = zeroUtils::findGroupOrdinal(_zeroInitStruct->getDevice(), deviceProperties);
+    auto groupOrdinal = intel_npu::zeroUtils::findCommandQueueGroupOrdinal(
+        _zeroInitStruct->getDevice(), ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COMPUTE);
 
     bool turbo = false;
     if (config.has<TURBO>()) {
@@ -1026,13 +1028,14 @@ std::shared_ptr<ov::ICompiledModel> Plugin::import_model(std::istream& stream, c
     if (const auto env = std::getenv("ENABLE_LLVM_BACKEND")) {
         _logger.warning("Using LLVM backend");
         (void)env;
-        auto graphSize = getFileSize(stream);
+        auto graphSize = MetadataBase::getFileSize(stream);
 
         std::vector<uint8_t> blob(graphSize);
         stream.read(reinterpret_cast<char*>(blob.data()), graphSize);
         std::cout << "Successfully read " << graphSize << " bytes into blob." << std::endl;
-        auto zeroBackend = std::dynamic_pointer_cast<ZeroEngineBackend>(_backends->getIEngineBackend()._ptr);
-        auto llvmGraph = std::make_shared<LLVMGraph>(blob, _context.get(), zeroBackend->getInitStruct(), localConfig);
+        //auto zeroBackend = std::dynamic_pointer_cast<ZeroEngineBackend>(_backends->getIEngineBackend()._ptr);
+       // auto llvmGraph = std::make_shared<LLVMGraph>(blob, _context.get(), zeroBackend->getInitStruct(), localConfig);
+       auto llvmGraph = std::make_shared<LLVMGraph>(blob, _context.get(), _backend->getInitStructs(), localConfig);
 
         const std::shared_ptr<ov::Model> modelDummy =
             create_dummy_model(llvmGraph->get_metadata().inputs, llvmGraph->get_metadata().outputs);

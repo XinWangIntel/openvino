@@ -65,7 +65,6 @@ protected:
     bool _sync_output_with_fences = true;
     std::shared_ptr<zeroProfiling::NpuInferProfiling> _npu_profiling;
     Logger _logger;
-    std::shared_ptr<IGraph> _graph;
     std::shared_ptr<ZeroInitStructsHolder> _initStructs;
 };
 
