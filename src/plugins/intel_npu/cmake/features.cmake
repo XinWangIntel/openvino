@@ -4,6 +4,10 @@
 
 ov_option(ENABLE_MLIR_COMPILER "Enable compilation of npu_mlir_compiler libraries" ON)
 
+#By default, the NPU plugin will use prebuilt MLIR compiler libraries by download from the internet.
+#If you want to build the MLIR compiler libraries from source, set this option to ON, the download will be skipped.
+ov_option(ENABLE_SYSTEM_NPU_MLIR_COMPILER "NPU plugin will not use prebuilt MLIR compiler libraries" OFF)
+
 ov_option(ENABLE_NPU_PLUGIN_ENGINE "Enable compilation of NPU plugin engine" ON)
 
 if(NOT ENABLE_NPU_PLUGIN_ENGINE AND ENABLE_TESTS)

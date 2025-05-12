@@ -17,6 +17,7 @@ set(NPU_INTERNAL_COMPONENT "${NPU_PLUGIN_COMPONENT}_internal")
 set(NPU_PLUGIN_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/features.cmake)
+include(cmake/download_mlir_prebuilt_libs.cmake)
 
 set(CMAKE_CXX_STANDARD 17)
 
