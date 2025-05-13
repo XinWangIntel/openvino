@@ -10,9 +10,6 @@ if(ENABLE_MLIR_COMPILER)
         set(MLIR_COMPILER_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/temp/mlir_compiler_libs")
         file(MAKE_DIRECTORY "${MLIR_COMPILER_LIBS_DIR}")
 
-        #set(MLIR_COMPILER_LIBS_URL "https://github.com/intel-innersource/applications.ai.vpu-accelerators.flex-cid-tools/releases/download/prebuilt_mlir_25ww20/prebuilt_mlir_libs_25ww20.zip")
-        #set(MLIR_COMPILER_LIBS_URL "https://af01p-ir.devtools.intel.com/artifactory/ir-public-models-ir-local/candidates-to-delete/test_package.tar.gz")
-        #set(MLIR_COMPILER_LIBS_URL "https://af01p-ir.devtools.intel.com/artifactory/vpu-sdl-scans-ir-local/test_reports/applications.ai.vpu-accelerators.vpux-plugin/prebuilt_mlir_libs_25ww20.zip")
         set(MLIR_COMPILER_LIBS_URL "https://af01p-ir.devtools.intel.com/artifactory/movidius_vpu_ip2_git_lfs_store-ir-local/xin-test/prebuilt_mlir_libs_25ww20.zip")
         set(MLIR_COMPILER_LIBS_ZIP "${MLIR_COMPILER_LIBS_DIR}/prebuilt_mlir_libs_25ww20.zip")
         set(MLIR_COMPILER_LIBS_DIR_UNZIPPED "${MLIR_COMPILER_LIBS_DIR}/prebuilt_mlir_libs_25ww20")
@@ -22,7 +19,6 @@ if(ENABLE_MLIR_COMPILER)
             # Download the prebuilt MLIR compiler libraries, if failure, show error message
             # and exit
             message(STATUS "Downloading prebuilt MLIR compiler libraries from ${MLIR_COMPILER_LIBS_URL}")
-            #file(DOWNLOAD "${MLIR_COMPILER_LIBS_URL}" "${MLIR_COMPILER_LIBS_ZIP}" SHOW_PROGRESS RESULT DL_RESULT)
             file(DOWNLOAD "${MLIR_COMPILER_LIBS_URL}" "${MLIR_COMPILER_LIBS_ZIP}"
                 TIMEOUT 3600
                 LOG log_output
@@ -42,14 +38,6 @@ if(ENABLE_MLIR_COMPILER)
             message(STATUS "Prebuilt MLIR compiler libraries already exist, skip download")
         endif()
 
-        # set(TEST_DEST_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
-
-        # add_custom_command(TARGET ${TARGET_NAME}
-        #     POST_BUILD
-        #     COMMAND ${CMAKE_COMMAND} -E copy_directory ${TEST_SOURCE_DIR} ${TEST_DEST_DIR}
-        #     COMMENT "Copying jit files to ${TEST_DEST_DIR} directory"
-        # )
-
         if(WIN32)
             file(COPY ${MLIR_COMPILER_LIBS_DIR_UNZIPPED}/Windows10/md/npu_mlir_compiler.dll
                 DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
@@ -61,12 +49,5 @@ if(ENABLE_MLIR_COMPILER)
             )
             message(STATUS "Copying prebuilt MLIR compiler libraries libnpu_mlir_compiler.so to ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
         endif()
-
-        # set(ENV{MLIR_COMPILER_LIBS_DIR} "${MLIR_COMPILER_LIBS_DIR_UNZIPPED}")
-        # if(WIN32)
-        #     set(ENV{PATH} "${MLIR_COMPILER_LIBS_DIR_UNZIPPED}/Windows10/md;${ENV{PATH}}")
-        # else()
-        #     set(ENV{LD_LIBRARY_PATH} "${MLIR_COMPILER_LIBS_DIR_UNZIPPED}/ubuntu22:$ENV{LD_LIBRARY_PATH}")
-        # endif()
     endif()
 endif()
