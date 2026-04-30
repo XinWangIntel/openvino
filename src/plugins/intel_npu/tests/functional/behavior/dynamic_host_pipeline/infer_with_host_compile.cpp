@@ -15,10 +15,26 @@ const std::vector<ov::AnyMap> configs = {
     {{"NPU_COMPILER_TYPE", "PLUGIN"},
      {"NPU_COMPILATION_MODE", "HostCompile"},
      {"NPU_CREATE_EXECUTOR", "0"},
-     // After HostCompile default params were changed to a more performant configuration, these tests fail
-     // under the new defaults and need investigation before they can be re-enabled with the new configuration
-     // Untill then set old defaults explicitly to keep the tests running.
+     // After HostCompile default params were changed to a more performant configuration,
+     // these tests fail under the new defaults and need investigation before they can be
+     // re-enabled with the new configuration Untill then set old defaults explicitly to
+     // keep the tests running.
      // Track: E#218923
+     {"NPU_COMPILATION_MODE_PARAMS", "dynamic-dim-alignment=false enable-auto-unrolling=false"}},
+    {{"NPU_COMPILER_TYPE", "PLUGIN"},
+     {"NPU_COMPILATION_MODE", "HostCompile"},
+     {"NPU_CREATE_EXECUTOR", "0"},
+     {"NPU_COMMANDLIST_MODE", "DEFAULT"},
+     {"NPU_COMPILATION_MODE_PARAMS", "dynamic-dim-alignment=false enable-auto-unrolling=false"}},
+    {{"NPU_COMPILER_TYPE", "PLUGIN"},
+     {"NPU_COMPILATION_MODE", "HostCompile"},
+     {"NPU_CREATE_EXECUTOR", "0"},
+     {"NPU_COMMANDLIST_MODE", "FORCE_COMMANDLIST_RECORDING_ONLY"},
+     {"NPU_COMPILATION_MODE_PARAMS", "dynamic-dim-alignment=false enable-auto-unrolling=false"}},
+    {{"NPU_COMPILER_TYPE", "PLUGIN"},
+     {"NPU_COMPILATION_MODE", "HostCompile"},
+     {"NPU_CREATE_EXECUTOR", "0"},
+     {"NPU_COMMANDLIST_MODE", "FORCE_UPDATE_MUTABLE_COMMANDLIST"},
      {"NPU_COMPILATION_MODE_PARAMS", "dynamic-dim-alignment=false enable-auto-unrolling=false"}}};
 
 INSTANTIATE_TEST_SUITE_P(smoke_BehaviorTests,

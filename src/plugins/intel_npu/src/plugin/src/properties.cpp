@@ -23,7 +23,7 @@ std::map<std::string, std::string> any_copy(const ov::AnyMap& params) {
 
 inline bool isSpecialBothProperty(const std::string& key) {
     return key == ov::hint::performance_mode.name() || key == ov::enable_profiling.name() ||
-           key == ov::log::level.name();
+           key == ov::log::level.name() || key == ov::intel_npu::commandlist_mode.name();
 }
 
 inline void logCpuPinningDeprecationWarning(intel_npu::Logger& logger) {
@@ -774,6 +774,7 @@ void Properties::registerCompiledModelProperties() {
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::backend_compilation_params, BACKEND_COMPILATION_PARAMS);
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::bypass_umd_caching, BYPASS_UMD_CACHING);
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::defer_weights_load, DEFER_WEIGHTS_LOAD);
+    TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::commandlist_mode, COMMANDLIST_MODE);
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::compiler_dynamic_quantization,
                                               COMPILER_DYNAMIC_QUANTIZATION);
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::qdq_optimization, QDQ_OPTIMIZATION);
@@ -789,6 +790,7 @@ void Properties::registerCompiledModelProperties() {
     TRY_REGISTER_COMPILEDMODEL_PROPERTY_IFSET(ov::intel_npu::enable_strides_for, ENABLE_STRIDES_FOR);
 
     TRY_REGISTER_VARPUB_PROPERTY(ov::intel_npu::batch_mode, BATCH_MODE, false);
+    TRY_REGISTER_VARPUB_PROPERTY(ov::intel_npu::commandlist_mode, COMMANDLIST_MODE, false);
     TRY_REGISTER_VARPUB_PROPERTY(ov::intel_npu::shared_common_queue, SHARED_COMMON_QUEUE, false);
 
     TRY_REGISTER_CUSTOM_PROPERTY(ov::hint::model_priority,
