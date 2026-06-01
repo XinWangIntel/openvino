@@ -821,6 +821,48 @@ TEST_P(InferWithHostCompileTests, CompileAndInferWithZeroTensorWithoutReference)
         << "Log content validation failed for second inference with new pointer, got: " << logCapture.str();
 }
 
+// Update output tensor to check result
+TEST_P(InferWithHostCompileTests, CompileAndInferWithZeroTensorAsOutput) {
+    // Skip test according to plugin specific disabledTestPatterns() (if any)
+    SKIP_IF_CURRENT_TEST_IS_DISABLED()
+    if (!isTargetDevice) {
+        GTEST_SKIP() << "Skip test for current device";
+    }
+
+    auto model = createMaxPoolModel();
+
+    core->set_property("NPU", ov::log::level(ov::log::Level::DEBUG));
+    auto setupResult = prepareRuntimeCompareContext(model);
+    if (setupResult.status == RuntimeCompareStatus::fail) {
+        FAIL() << setupResult.message;
+    }
+    if (setupResult.status == RuntimeCompareStatus::skip) {
+        GTEST_SKIP() << setupResult.message;
+    }
+    auto& testContext = setupResult.context;
+
+    // Start from a regular host tensor.
+    ov::Shape shape = {1, 16, 720, 1280};
+    ov::Tensor inTensor = ov::test::utils::create_and_fill_tensor(model->input().get_element_type(), shape, 100, 0);
+    ov::InferRequest reqDynamic1 = testContext.compiledModel.create_infer_request();
+    ov::InferRequest reqReference1 = testContext.referenceCompiledModel.create_infer_request();
+    setInputInferAndCompare(model, reqDynamic1, reqReference1, inTensor, "CompileAndInferWithZeroTensor_first");
+
+    auto zeroContext = core->get_default_context(target_device);
+    auto outputShape = reqDynamic1.get_tensor(model->output()).get_shape();
+    auto zeroOutputTensorForSecondInfer =
+        zeroContext.create_host_tensor(model->input().get_element_type(), outputShape);
+    auto hostTensorSourceForOutputForSecondInfer =
+        ov::test::utils::create_and_fill_tensor(model->input().get_element_type(), outputShape, 100, 0);
+    ASSERT_EQ(hostTensorSourceForOutputForSecondInfer.get_byte_size(), zeroOutputTensorForSecondInfer.get_byte_size())
+        << "Source and destination tensors must have identical byte sizes for copy";
+    std::memcpy(zeroOutputTensorForSecondInfer.data(),
+                hostTensorSourceForOutputForSecondInfer.data(),
+                hostTensorSourceForOutputForSecondInfer.get_byte_size());
+    OV_ASSERT_NO_THROW(reqDynamic1.set_tensor(model->output(), zeroOutputTensorForSecondInfer));
+    inferAndCompare(model, reqDynamic1, reqReference1, "CompileAndInferWithZeroTensor_second");
+}
+
 }  // namespace behavior
 }  // namespace test
 }  // namespace ov
