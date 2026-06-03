@@ -491,6 +491,8 @@ struct COMMANDLIST_MODE final : OptionBase<COMMANDLIST_MODE, ov::intel_npu::Comm
     static ov::intel_npu::CommandListMode parse(std::string_view val) {
         if (val == "DEFAULT") {
             return ov::intel_npu::CommandListMode::DEFAULT;
+        } else if (val == "ENABLE_MUTABLE_COMMANDLIST") {
+            return ov::intel_npu::CommandListMode::ENABLE_MUTABLE_COMMANDLIST;
         } else if (val == "FORCE_COMMANDLIST_RECORDING_ONLY") {
             return ov::intel_npu::CommandListMode::FORCE_COMMANDLIST_RECORDING_ONLY;
         } else if (val == "FORCE_UPDATE_MUTABLE_COMMANDLIST") {

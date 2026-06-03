@@ -28,7 +28,7 @@ inline constexpr const char* kLogUpdateCommandList = "Update command list and ex
 inline constexpr const char* kLogReuseCommandList = "Reuse command list without update since no tensor change detected";
 
 inline std::shared_ptr<ov::Model> createMaxPoolModel() {
-    auto input = std::make_shared<ov::op::v0::Parameter>(ov::element::f32,
+    auto input = std::make_shared<ov::op::v0::Parameter>(ov::element::f16,
                                                          ov::PartialShape{1, 16, 720, ov::Dimension(10, 1280)});
     input->set_friendly_name("input1");
 
@@ -239,8 +239,12 @@ bool InferWithHostCompileTests::logCheck(const ScopedLogCapture& logCapture, Bin
     } else {
         // DEFAULT mode
         if (BindingStatus::ptr_changed == status) {
-            // If ptr_changed, update command list is expected
-            return logCapture.str().find(kLogUpdateCommandList) != std::string::npos;
+            if (mode == "ENABLE_MUTABLE_COMMANDLIST") {
+                // If ptr changed and mutable command list is enabled, update command list is expected.
+                return logCapture.str().find(kLogUpdateCommandList) != std::string::npos;
+            }
+            // If ptr_changed, command list reset is expected if mutable command list is not enabled
+            return logCapture.str().find(kLogResetCommandList) != std::string::npos;
         } else if (BindingStatus::unchanged == status) {
             // If nothing changed, command list reuse is expected
             return logCapture.str().find(kLogReuseCommandList) != std::string::npos;

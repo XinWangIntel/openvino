@@ -126,12 +126,14 @@ inline std::ostream& operator<<(std::ostream& out, const BatchMode& fmt) {
  * @brief [Only for NPU Plugin]
  * Type: String. Default is "DEFAULT".
  * Selects the command list update strategy used by the plugin.
- * Possible values: "DEFAULT", "FORCE_UPDATE_MUTABLE_COMMANDLIST", "FORCE_COMMANDLIST_RECORDING_ONLY"
+ * Possible values: "DEFAULT", "ENABLE_MUTABLE_COMMANDLIST", "FORCE_UPDATE_MUTABLE_COMMANDLIST",
+ * "FORCE_COMMANDLIST_RECORDING_ONLY"
  */
 enum class CommandListMode {
     DEFAULT = 0,
-    FORCE_UPDATE_MUTABLE_COMMANDLIST = 1,
-    FORCE_COMMANDLIST_RECORDING_ONLY = 2,
+    ENABLE_MUTABLE_COMMANDLIST = 1,
+    FORCE_UPDATE_MUTABLE_COMMANDLIST = 2,
+    FORCE_COMMANDLIST_RECORDING_ONLY = 3,
 };
 
 /**
@@ -145,6 +147,9 @@ inline std::ostream& operator<<(std::ostream& out, const CommandListMode& fmt) {
     switch (fmt) {
     case CommandListMode::DEFAULT: {
         out << "DEFAULT";
+    } break;
+    case CommandListMode::ENABLE_MUTABLE_COMMANDLIST: {
+        out << "ENABLE_MUTABLE_COMMANDLIST";
     } break;
     case CommandListMode::FORCE_UPDATE_MUTABLE_COMMANDLIST: {
         out << "FORCE_UPDATE_MUTABLE_COMMANDLIST";

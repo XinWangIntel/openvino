@@ -352,7 +352,8 @@ void DynamicGraphImpl::executeGraph(const std::shared_ptr<ZeroInitStructsHolder>
             }
         } else if (!commandListRecordingRequired &&
                    (inImpl->_ptrUpdated || inImpl->_shapeUpdated || inImpl->_strideUpdated)) {
-            if (inImpl->_ptrUpdated && _optimizedDynamicStridesMode) {
+            if (inImpl->_ptrUpdated && _optimizedDynamicStridesMode &&
+                _bindingCommandListMode == ov::intel_npu::CommandListMode::ENABLE_MUTABLE_COMMANDLIST) {
                 _logger.debug(
                     "Input tensor pointer change detected for index %d, and optimized dynamic stride is supported, "
                     "which can be updated with UpdateMutableCommandList API without recording a new command list.",
@@ -390,7 +391,8 @@ void DynamicGraphImpl::executeGraph(const std::shared_ptr<ZeroInitStructsHolder>
             }
         } else if (!commandListRecordingRequired &&
                    (outImpl->_ptrUpdated || outImpl->_shapeUpdated || outImpl->_strideUpdated)) {
-            if (outImpl->_ptrUpdated && _optimizedDynamicStridesMode) {
+            if (outImpl->_ptrUpdated && _optimizedDynamicStridesMode &&
+                _bindingCommandListMode == ov::intel_npu::CommandListMode::ENABLE_MUTABLE_COMMANDLIST) {
                 _logger.debug(
                     "Output tensor pointer change detected for index %d, and optimized dynamic stride is supported, "
                     "which can be updated with UpdateMutableCommandList API without recording a new command list.",
