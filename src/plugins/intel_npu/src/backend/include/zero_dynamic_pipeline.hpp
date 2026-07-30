@@ -23,10 +23,12 @@ struct VMExecutionContext {
     ~VMExecutionContext();
 
     // Create the context for vmRuntime if not created yet; returns the handle.
-    // When npuVMRuntimeCreateExecutionContext2 is available, initflag is forwarded
-    // to the runtime so it can configure the context for the chosen execution path
+    // When useV2 is true (API version >= 2.0), npuVMRuntimeCreateExecutionContext2 is called with initflag
+    // so the runtime can configure the context for the chosen execution path
     // (immediate vs. shared command queue). Pass the same flags used for Execute2.
-    npu_vm_runtime_execution_context_handle_t ensure(npu_vm_runtime_handle_t vmRuntime, uint64_t initflag = 0);
+    npu_vm_runtime_execution_context_handle_t ensure(npu_vm_runtime_handle_t vmRuntime,
+                                                     bool useV2 = false,
+                                                     uint64_t initflag = 0);
 
     // Destroy the context so it will be lazily recreated on the next ensure() call.
     // Use this when the command queue configuration changes and the internally cached
@@ -185,6 +187,7 @@ private:
 
     // VM execution context owned by this pipeline; shared between shape prediction and execution.
     VMExecutionContext _executionContext;
+    npu_vm_runtime_version_t _apiVersion{};
     bool _use_v2_api = false;
     // Exec flags derived once at init from config (e.g. SHARED_COMMON_QUEUE).
     // These reflect static configuration choices and do not change at runtime.

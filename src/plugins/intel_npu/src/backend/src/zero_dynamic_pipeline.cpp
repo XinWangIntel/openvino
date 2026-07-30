@@ -123,11 +123,11 @@ VMExecutionContext::~VMExecutionContext() {
 }
 
 npu_vm_runtime_execution_context_handle_t VMExecutionContext::ensure(npu_vm_runtime_handle_t vmRuntime,
+                                                                     bool useV2,
                                                                      uint64_t initflag) {
     if (_handle == nullptr) {
-        const auto& vmRuntimeApi = NPUVMRuntimeApi::getInstance();
         npu_vm_runtime_result_t result = NPU_VM_RUNTIME_RESULT_SUCCESS;
-        if (vmRuntimeApi->npuVMRuntimeCreateExecutionContext2 != nullptr) {
+        if (useV2) {
             result = npuVMRuntimeCreateExecutionContext2(vmRuntime, initflag, &_handle);
         } else {
             result = npuVMRuntimeCreateExecutionContext(vmRuntime, &_handle);
@@ -190,11 +190,8 @@ DynamicPipeline::DynamicPipeline(const std::shared_ptr<ZeroInitStructsHolder>& i
 
     _logger.debug("Initialization started, batch size: %zu", _batch_size);
 
-    npu_vm_runtime_version_t apiVersion{};
-    const auto& vmRuntimeApi = NPUVMRuntimeApi::getInstance();
-    if (npuVMRuntimeGetAPIVersion(&apiVersion) == NPU_VM_RUNTIME_RESULT_SUCCESS &&
-        apiVersion >= NPU_VM_RUNTIME_VERSION_2_0 && vmRuntimeApi->npuVMRuntimeExecute2 != nullptr &&
-        vmRuntimeApi->npuVMRuntimeHostSync != nullptr) {
+    if (npuVMRuntimeGetAPIVersion(&_apiVersion) == NPU_VM_RUNTIME_RESULT_SUCCESS &&
+        _apiVersion >= NPU_VM_RUNTIME_VERSION_2_0) {
         _use_v2_api = true;
         _wait_ids.resize(_batch_size ? _batch_size : 1, 0);
         // Derive exec flags once from the initial command queue descriptor.
@@ -485,7 +482,7 @@ void DynamicPipeline::execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
     params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
     params.pOutputs = outputMemRefHandles.data();
     params.numOfOutputs = static_cast<uint32_t>(outputMemRefHandles.size());
-    params.executionContext = _executionContext.ensure(vmRuntime, execFlags);
+    params.executionContext = _executionContext.ensure(vmRuntime, true, execFlags);
 
     npu_vm_runtime_wait_id_t waitId = 0;
     _logger.debug("execute_vm_runtime_v2 - calling npuVMRuntimeExecute2");
@@ -560,13 +557,9 @@ std::vector<ov::Shape> DynamicPipeline::predict_output_shapes(
     processMemRefs(outputsMemRefs, outputMemRefHandles);
 
     npu_vm_runtime_result_t result = NPU_VM_RUNTIME_RESULT_SUCCESS;
-    npu_vm_runtime_version_t version{};
-    if ((result = npuVMRuntimeGetAPIVersion(&version)) != NPU_VM_RUNTIME_RESULT_SUCCESS) {
-        OPENVINO_THROW("Failed to get VM runtime version, error code: ", result);
-    }
-    _logger.debug("VM runtime version: %u.%u", ZE_MAJOR_VERSION(version), ZE_MINOR_VERSION(version));
+    _logger.debug("VM runtime version: %u.%u", ZE_MAJOR_VERSION(_apiVersion), ZE_MINOR_VERSION(_apiVersion));
 
-    if (version == NPU_VM_RUNTIME_VERSION_1_0) {
+    if (_apiVersion == NPU_VM_RUNTIME_VERSION_1_0) {
         npu_vm_runtime_predict_output_shape_params_t params{};
         params.pInputs = inputMemRefHandles.data();
         params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
@@ -580,7 +573,7 @@ std::vector<ov::Shape> DynamicPipeline::predict_output_shapes(
         params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
         params.pOutputs = outputMemRefHandles.data();
         params.numOfOutputs = static_cast<uint32_t>(outputMemRefHandles.size());
-        params.executionContext = _executionContext.ensure(vmRuntime, _exec_flags);
+        params.executionContext = _executionContext.ensure(vmRuntime, _use_v2_api, _exec_flags);
 
         result = npuVMRuntimePredictOutputShape2(vmRuntime, &params);
     }
