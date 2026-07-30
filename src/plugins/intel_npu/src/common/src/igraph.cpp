@@ -70,6 +70,10 @@ void IGraph::set_model_priority(const ov::hint::Priority) {
     OPENVINO_THROW("set_model_priority not implemented");
 }
 
+uint64_t IGraph::get_vm_exec_flags() const {
+    return 0;
+}
+
 void IGraph::set_last_submitted_event(const std::shared_ptr<Event>&, size_t) {
     OPENVINO_THROW("set_last_submitted_event not implemented");
 }

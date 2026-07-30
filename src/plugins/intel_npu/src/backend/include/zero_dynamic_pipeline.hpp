@@ -165,9 +165,16 @@ private:
                             ze_command_queue_handle_t commandQueue,
                             ze_fence_handle_t fence,
                             ze_event_handle_t event);
+    void execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
+                               DynamicArguments& args,
+                               ze_command_queue_handle_t commandQueue,
+                               uint64_t execFlags);
 
     // VM execution context owned by this pipeline; shared between shape prediction and execution.
     VMExecutionContext _executionContext;
+    bool _use_v2_api = false;
+    std::vector<npu_vm_runtime_wait_id_t> _wait_ids;
+    size_t _current_push_index = 0;
     std::vector<std::unique_ptr<PipelinedCommandLists>> _command_lists;
 };
 
