@@ -197,7 +197,14 @@ DynamicPipeline::DynamicPipeline(const std::shared_ptr<ZeroInitStructsHolder>& i
         vmRuntimeApi->npuVMRuntimeHostSync != nullptr) {
         _use_v2_api = true;
         _wait_ids.resize(_batch_size ? _batch_size : 1, 0);
-        _logger.debug("DynamicPipeline: using v2.0 VM runtime API");
+        // Derive exec flags once from the initial command queue descriptor.
+        // SHARED_COMMON_QUEUE is a config-time setting that does not change via set_property,
+        // so there is no need to recompute this on every push.
+        _exec_flags = _graph->get_command_queue_desc().shared_common_queue()
+                          ? NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE
+                          : 0;
+        _logger.debug("DynamicPipeline: using v2.0 VM runtime API, exec_flags=0x%lx",
+                      static_cast<unsigned long>(_exec_flags));
     } else {
         _logger.debug("DynamicPipeline: using v1.x VM runtime API");
     }
@@ -307,22 +314,9 @@ void DynamicPipeline::push() {
     OPENVINO_ASSERT(vmRuntime != nullptr, "DynamicPipeline requires a valid VM runtime engine");
 
     const auto command_queue_desc = _graph->get_command_queue_desc();
-    // Derive exec flags from the current command queue descriptor so that any runtime
-    // change to the descriptor (priority, workload type, etc.) is immediately reflected.
-    const uint64_t execFlags =
-        command_queue_desc.shared_common_queue() ? NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE : 0;
-
     const bool command_queue_version_changed = (command_queue_desc.key() != _command_queue->desc().key());
     if (command_queue_version_changed) {
         _command_queue = ZeroCmdQueuePool::getInstance().getCommandQueue(_init_structs, command_queue_desc);
-
-        if (_use_v2_api && !(execFlags & NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE)) {
-            // In the v2 immediate-CL path the interpreter configures its internal command list
-            // once from the provided command queue's descriptor.  Destroy the execution context
-            // so it is recreated on the next Execute2 call using the updated queue configuration
-            // (new priority, workload type, etc.).
-            _executionContext.reset();
-        }
 
         if (_sync_output_with_fences && !_use_v2_api) {
             for (size_t i = 0; i < _fences.size(); i++) {
@@ -350,7 +344,7 @@ void DynamicPipeline::push() {
         }
 
         if (_use_v2_api) {
-            execute_vm_runtime_v2(vmRuntime, dynamicArguments, commandQueueHandle, execFlags);
+            execute_vm_runtime_v2(vmRuntime, dynamicArguments, commandQueueHandle, _exec_flags);
         } else {
             ze_fence_handle_t fence = nullptr;
             ze_event_handle_t event = nullptr;
@@ -586,10 +580,7 @@ std::vector<ov::Shape> DynamicPipeline::predict_output_shapes(
         params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
         params.pOutputs = outputMemRefHandles.data();
         params.numOfOutputs = static_cast<uint32_t>(outputMemRefHandles.size());
-        const uint64_t execFlags = _graph->get_command_queue_desc().shared_common_queue()
-                                       ? NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE
-                                       : 0;
-        params.executionContext = _executionContext.ensure(vmRuntime, execFlags);
+        params.executionContext = _executionContext.ensure(vmRuntime, _exec_flags);
 
         result = npuVMRuntimePredictOutputShape2(vmRuntime, &params);
     }

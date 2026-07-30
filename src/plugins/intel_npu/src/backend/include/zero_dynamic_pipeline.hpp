@@ -186,6 +186,9 @@ private:
     // VM execution context owned by this pipeline; shared between shape prediction and execution.
     VMExecutionContext _executionContext;
     bool _use_v2_api = false;
+    // Exec flags derived once at init from config (e.g. SHARED_COMMON_QUEUE).
+    // These reflect static configuration choices and do not change at runtime.
+    uint64_t _exec_flags = 0;
     std::vector<npu_vm_runtime_wait_id_t> _wait_ids;
     size_t _current_push_index = 0;
     std::vector<std::unique_ptr<PipelinedCommandLists>> _command_lists;
