@@ -336,7 +336,12 @@ void DynamicPipeline::push() {
             if (_sync_output_with_fences) {
                 fence = _fences.at(i)->handle();
             }
-            execute_vm_runtime(vmRuntime, dynamicArguments, command_lists->getHandles(), commandQueueHandle, fence, event);
+            execute_vm_runtime(vmRuntime,
+                               dynamicArguments,
+                               command_lists->getHandles(),
+                               commandQueueHandle,
+                               fence,
+                               event);
         }
     }
 

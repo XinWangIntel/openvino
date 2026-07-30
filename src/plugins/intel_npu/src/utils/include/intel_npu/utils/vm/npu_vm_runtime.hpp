@@ -349,9 +349,9 @@ typedef struct _npu_vm_runtime_execute_params2_t {
 ///          In both paths, call npuVMRuntimeHostSync(hRuntime, waitId) to block
 ///          until the inference completes.
 NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRuntimeExecute2(
-    npu_vm_runtime_handle_t hRuntime,            ///< [in]  handle of VM runtime object
-    npu_vm_runtime_execute_params2_t* pParams,   ///< [in]  pointer to v2 execution parameters
-    npu_vm_runtime_wait_id_t* pWaitId            ///< [out] opaque wait identifier for host sync
+    npu_vm_runtime_handle_t hRuntime,           ///< [in]  handle of VM runtime object
+    npu_vm_runtime_execute_params2_t* pParams,  ///< [in]  pointer to v2 execution parameters
+    npu_vm_runtime_wait_id_t* pWaitId           ///< [out] opaque wait identifier for host sync
 );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -361,8 +361,8 @@ NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRun
 ///          After this call returns SUCCESS, the waitId is consumed and must not
 ///          be reused. Output buffers are safe to read after this returns.
 NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRuntimeHostSync(
-    npu_vm_runtime_handle_t hRuntime,   ///< [in] handle of VM runtime object
-    npu_vm_runtime_wait_id_t waitId     ///< [in] wait identifier returned by npuVMRuntimeExecute2
+    npu_vm_runtime_handle_t hRuntime,  ///< [in] handle of VM runtime object
+    npu_vm_runtime_wait_id_t waitId    ///< [in] wait identifier returned by npuVMRuntimeExecute2
 );
 
 #if defined(__cplusplus)

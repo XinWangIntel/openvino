@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <vector>
