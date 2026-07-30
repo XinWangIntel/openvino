@@ -122,9 +122,17 @@ VMExecutionContext::~VMExecutionContext() {
     }
 }
 
-npu_vm_runtime_execution_context_handle_t VMExecutionContext::ensure(npu_vm_runtime_handle_t vmRuntime) {
+npu_vm_runtime_execution_context_handle_t VMExecutionContext::ensure(npu_vm_runtime_handle_t vmRuntime,
+                                                                     uint64_t initflag) {
     if (_handle == nullptr) {
-        if (npuVMRuntimeCreateExecutionContext(vmRuntime, &_handle) != NPU_VM_RUNTIME_RESULT_SUCCESS) {
+        const auto& vmRuntimeApi = NPUVMRuntimeApi::getInstance();
+        npu_vm_runtime_result_t result = NPU_VM_RUNTIME_RESULT_SUCCESS;
+        if (vmRuntimeApi->npuVMRuntimeCreateExecutionContext2 != nullptr) {
+            result = npuVMRuntimeCreateExecutionContext2(vmRuntime, initflag, &_handle);
+        } else {
+            result = npuVMRuntimeCreateExecutionContext(vmRuntime, &_handle);
+        }
+        if (result != NPU_VM_RUNTIME_RESULT_SUCCESS) {
             OPENVINO_THROW("Failed to create a VM execution context");
         }
     }
@@ -483,7 +491,7 @@ void DynamicPipeline::execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
     params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
     params.pOutputs = outputMemRefHandles.data();
     params.numOfOutputs = static_cast<uint32_t>(outputMemRefHandles.size());
-    params.executionContext = _executionContext.ensure(vmRuntime);
+    params.executionContext = _executionContext.ensure(vmRuntime, execFlags);
 
     npu_vm_runtime_wait_id_t waitId = 0;
     _logger.debug("execute_vm_runtime_v2 - calling npuVMRuntimeExecute2");
@@ -578,7 +586,10 @@ std::vector<ov::Shape> DynamicPipeline::predict_output_shapes(
         params.numOfInputs = static_cast<uint32_t>(inputMemRefHandles.size());
         params.pOutputs = outputMemRefHandles.data();
         params.numOfOutputs = static_cast<uint32_t>(outputMemRefHandles.size());
-        params.executionContext = _executionContext.ensure(vmRuntime);
+        const uint64_t execFlags = _graph->get_command_queue_desc().shared_common_queue()
+                                       ? NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE
+                                       : 0;
+        params.executionContext = _executionContext.ensure(vmRuntime, execFlags);
 
         result = npuVMRuntimePredictOutputShape2(vmRuntime, &params);
     }

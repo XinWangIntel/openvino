@@ -226,6 +226,20 @@ NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRun
 );
 
 ///////////////////////////////////////////////////////////////////////////////
+/// @brief Init VM runtime execution context with flags (v2.0)
+/// @details Use this instead of npuVMRuntimeCreateExecutionContext when the VM runtime
+///          API version is 2.0 or later. The initflag bitmask controls how the
+///          interpreter configures its internal command list for this context.
+///          Pass the same flags that will be supplied to npuVMRuntimeExecute2 so
+///          the interpreter can prepare the context accordingly.
+NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRuntimeCreateExecutionContext2(
+    npu_vm_runtime_handle_t hRuntime,  ///< [in] handle of VM runtime object
+    uint64_t initflag,                 ///< [in] bitmask of npu_vm_runtime_execute_flags_t values
+    npu_vm_runtime_execution_context_handle_t*
+        phExecutionHandle  ///< [out] pointer to handle of VM runtime execution context created
+);
+
+///////////////////////////////////////////////////////////////////////////////
 /// @brief Destroy VM runtime instance
 NPU_VM_RUNTIME_APIEXPORT npu_vm_runtime_result_t NPU_VM_RUNTIME_APICALL npuVMRuntimeDestroyExecutionContext(
     npu_vm_runtime_execution_context_handle_t

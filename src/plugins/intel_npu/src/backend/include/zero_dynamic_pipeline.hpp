@@ -23,7 +23,10 @@ struct VMExecutionContext {
     ~VMExecutionContext();
 
     // Create the context for vmRuntime if not created yet; returns the handle.
-    npu_vm_runtime_execution_context_handle_t ensure(npu_vm_runtime_handle_t vmRuntime);
+    // When npuVMRuntimeCreateExecutionContext2 is available, initflag is forwarded
+    // to the runtime so it can configure the context for the chosen execution path
+    // (immediate vs. shared command queue). Pass the same flags used for Execute2.
+    npu_vm_runtime_execution_context_handle_t ensure(npu_vm_runtime_handle_t vmRuntime, uint64_t initflag = 0);
 
     // Destroy the context so it will be lazily recreated on the next ensure() call.
     // Use this when the command queue configuration changes and the internally cached
