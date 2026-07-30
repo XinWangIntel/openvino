@@ -299,9 +299,22 @@ void DynamicPipeline::push() {
     OPENVINO_ASSERT(vmRuntime != nullptr, "DynamicPipeline requires a valid VM runtime engine");
 
     const auto command_queue_desc = _graph->get_command_queue_desc();
+    // Derive exec flags from the current command queue descriptor so that any runtime
+    // change to the descriptor (priority, workload type, etc.) is immediately reflected.
+    const uint64_t execFlags =
+        command_queue_desc.shared_common_queue() ? NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE : 0;
+
     const bool command_queue_version_changed = (command_queue_desc.key() != _command_queue->desc().key());
     if (command_queue_version_changed) {
         _command_queue = ZeroCmdQueuePool::getInstance().getCommandQueue(_init_structs, command_queue_desc);
+
+        if (_use_v2_api && !(execFlags & NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE)) {
+            // In the v2 immediate-CL path the interpreter configures its internal command list
+            // once from the provided command queue's descriptor.  Destroy the execution context
+            // so it is recreated on the next Execute2 call using the updated queue configuration
+            // (new priority, workload type, etc.).
+            _executionContext.reset();
+        }
 
         if (_sync_output_with_fences && !_use_v2_api) {
             for (size_t i = 0; i < _fences.size(); i++) {
@@ -329,7 +342,7 @@ void DynamicPipeline::push() {
         }
 
         if (_use_v2_api) {
-            execute_vm_runtime_v2(vmRuntime, dynamicArguments, commandQueueHandle, _graph->get_vm_exec_flags());
+            execute_vm_runtime_v2(vmRuntime, dynamicArguments, commandQueueHandle, execFlags);
         } else {
             ze_fence_handle_t fence = nullptr;
             ze_event_handle_t event = nullptr;

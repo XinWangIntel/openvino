@@ -39,9 +39,6 @@ public:
     CommandQueueDesc get_command_queue_desc() const override;
     void set_workload_type(const ov::WorkloadType workloadType) override;
     void set_model_priority(const ov::hint::Priority modelPriority) override;
-    uint64_t get_vm_exec_flags() const override {
-        return _vmExecFlags;
-    }
 
     void set_batch_size(std::size_t batch) override;
 
@@ -76,7 +73,6 @@ private:
 
     mutable std::mutex _commandQueueDescMutex;
     CommandQueueDesc _commandQueueDesc;
-    uint64_t _vmExecFlags = 0;
     std::vector<std::shared_ptr<Event>> _lastSubmittedEvent;
 
     std::optional<ov::Tensor> _blob;

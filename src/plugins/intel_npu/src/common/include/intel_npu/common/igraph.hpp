@@ -59,7 +59,6 @@ public:
     virtual CommandQueueDesc get_command_queue_desc() const;
     virtual void set_workload_type(const ov::WorkloadType workloadType);
     virtual void set_model_priority(const ov::hint::Priority modelPriority);
-    virtual uint64_t get_vm_exec_flags() const;
 
     std::mutex& get_mutex() {
         return _initialize_mutex;

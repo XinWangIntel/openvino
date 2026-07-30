@@ -359,10 +359,6 @@ void DynamicGraph::initialize_impl(const FilteredConfig& config) {
             commandQueueOptions,
             this,
             config.get<SHARED_COMMON_QUEUE>()};
-        _vmExecFlags = 0;
-        if (config.get<SHARED_COMMON_QUEUE>()) {
-            _vmExecFlags |= NPU_VM_RUNTIME_EXEC_FLAG_SHARED_COMMAND_QUEUE;
-        }
 
         if (config.get<SHARED_COMMON_QUEUE>() == false) {
             // Keep it alive per compiled model when the shared common queue feature is disabled.

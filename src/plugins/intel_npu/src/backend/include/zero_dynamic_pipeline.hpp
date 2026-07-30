@@ -24,6 +24,16 @@ struct VMExecutionContext {
 
     // Create the context for vmRuntime if not created yet; returns the handle.
     npu_vm_runtime_execution_context_handle_t ensure(npu_vm_runtime_handle_t vmRuntime);
+
+    // Destroy the context so it will be lazily recreated on the next ensure() call.
+    // Use this when the command queue configuration changes and the internally cached
+    // immediate command list must be recreated with the new queue's parameters.
+    void reset() {
+        if (_handle != nullptr) {
+            npuVMRuntimeDestroyExecutionContext(_handle);
+            _handle = nullptr;
+        }
+    }
 };
 
 struct DynamicArguments {
