@@ -70,14 +70,18 @@ class DynamicPipeline final : public IPipeline {
         // Store command list handles to pass it to ExecutionEngine
         std::vector<ze_command_list_handle_t> _commandListHandles;
 
-        PipelinedCommandLists(size_t numCommandLists, const std::shared_ptr<ZeroInitStructsHolder>& init_structs) {
-            _commandLists.reserve(numCommandLists);
-            for (size_t i = 0; i < numCommandLists; i++) {
-                _commandLists.emplace_back(std::make_unique<CommandList>(init_structs));
-            }
+        PipelinedCommandLists(size_t numCommandLists,
+                             const std::shared_ptr<ZeroInitStructsHolder>& init_structs,
+                             bool useV2 = false) {
+            if (!useV2) {
+                _commandLists.reserve(numCommandLists);
+                for (size_t i = 0; i < numCommandLists; i++) {
+                    _commandLists.emplace_back(std::make_unique<CommandList>(init_structs));
+                }
 
-            for (size_t i = 0; i < numCommandLists; i++) {
-                _commandListHandles.push_back(_commandLists[i]->handle());
+                for (size_t i = 0; i < numCommandLists; i++) {
+                    _commandListHandles.push_back(_commandLists[i]->handle());
+                }
             }
 
             _arguments = std::make_shared<DynamicArguments>();
@@ -187,7 +191,7 @@ private:
 
     // VM execution context owned by this pipeline; shared between shape prediction and execution.
     VMExecutionContext _executionContext;
-    npu_vm_runtime_version_t _apiVersion{};
+    npu_vm_runtime_version_t _apiVersion = NPU_VM_RUNTIME_VERSION_1_0;
     bool _use_v2_api = false;
     // Exec flags derived once at init from config (e.g. SHARED_COMMON_QUEUE).
     // These reflect static configuration choices and do not change at runtime.

@@ -222,7 +222,7 @@ DynamicPipeline::DynamicPipeline(const std::shared_ptr<ZeroInitStructsHolder>& i
     if (batch_size >= 1) {
         _logger.debug("Initializing %zu command list group(s) (batch size %zu)", batch_size, batch_size);
         for (size_t i = 0; i < _batch_size; i++) {
-            _command_lists.emplace_back(std::make_unique<PipelinedCommandLists>(num_of_subgraphs, _init_structs));
+            _command_lists.emplace_back(std::make_unique<PipelinedCommandLists>(num_of_subgraphs, _init_structs, _use_v2_api));
         }
     } else {
         OPENVINO_THROW("Batch size must be greater than 0, but got ", batch_size);
