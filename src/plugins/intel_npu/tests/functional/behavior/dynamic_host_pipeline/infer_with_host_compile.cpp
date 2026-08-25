@@ -1715,6 +1715,212 @@ TEST_P(InferWithDefaultHostCompileTests, CompileDynamicModelWithNoHostCompileMod
     OV_ASSERT_NO_THROW(reqDynamic.infer());
 }
 
+// ── V2 MemRef reuse: same-pointer / same-shape input ──────────────────────────
+//
+// Verifies that execute_vm_runtime_v2 emits "execute_vm_runtime_v2 - recording"
+// on the first inference (or when a tensor changes) and
+// "execute_vm_runtime_v2 - reuse, no tensor change detected" when neither the
+// pointer nor the shape has changed since the previous execution.
+//
+// The test is skipped when the v2 code path is not active (i.e., when
+// "execute_vm_runtime_v2 - started" is absent from the first-inference logs).
+TEST_P(InferWithHostCompileTests, V2_MemRefReuse_SamePtrSameShape) {
+    SKIP_IF_CURRENT_TEST_IS_DISABLED()
+    if (!isTargetDevice) {
+        GTEST_SKIP() << "Skip test for current device";
+    }
+
+    core->set_property("NPU", ov::log::level(ov::log::Level::DEBUG));
+
+    for (bool sharedQueue : {true, false}) {
+        ov::AnyMap cfg = configuration;
+        cfg[ov::intel_npu::shared_common_queue.name()] = sharedQueue;
+
+        auto model = createModelByName(selectedModelName);
+        RuntimeCompareSetupResult setupResult;
+        {
+            auto savedCfg = configuration;
+            configuration = cfg;
+            setupResult = prepareRuntimeCompareContext(model);
+            configuration = savedCfg;
+        }
+        if (setupResult.status == RuntimeCompareStatus::fail) {
+            FAIL() << "shared=" << sharedQueue << ": " << setupResult.message;
+        }
+        if (setupResult.status == RuntimeCompareStatus::skip) {
+            GTEST_SKIP() << setupResult.message;
+        }
+        auto& ctx = setupResult.context;
+        const std::string tag = sharedQueue ? "shared" : "nonshared";
+
+        ov::Shape shape;
+        if (selectedModelName == "MaxPool_NCHW") {
+            shape = {1, 16, 720, 1280};
+        } else {
+            shape = {1, 720, 1280, 16};
+        }
+        ov::Tensor t0 = ov::test::utils::create_and_fill_tensor(
+                model->input().get_element_type(), shape, 100, 0);
+
+        // 1st inference: recording expected
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(setInputInferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                                       t0, tag + "_v2_first"));
+            const std::string logs = logCapture.str();
+            if (logs.find("execute_vm_runtime_v2 - started") == std::string::npos) {
+                GTEST_SKIP() << "V2 API not active for shared=" << sharedQueue << ", skipping";
+            }
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - recording"), std::string::npos)
+                << tag << ": expected recording log on first inference";
+        }
+
+        // 2nd inference: same tensor (same pointer + same shape) → reuse
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(inferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                               tag + "_v2_same_reuse"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - reuse, no tensor change detected"), std::string::npos)
+                << tag << ": expected reuse log on second inference with same tensor";
+        }
+
+        // 3rd inference: new tensor (different pointer, same shape) → recording
+        ov::Tensor t1 = ov::test::utils::create_and_fill_tensor(
+                model->input().get_element_type(), shape, 200, 0);
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(setInputInferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                                       t1, tag + "_v2_new_ptr"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - recording"), std::string::npos)
+                << tag << ": expected recording log when input pointer changes";
+        }
+
+        // 4th inference: same new tensor again → reuse
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(inferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                               tag + "_v2_new_ptr_reuse"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - reuse, no tensor change detected"), std::string::npos)
+                << tag << ": expected reuse log when same new tensor is reused";
+        }
+
+        // 5th inference: different shape → recording
+        ov::Shape shape2;
+        if (selectedModelName == "MaxPool_NCHW") {
+            shape2 = {1, 16, 360, 640};
+        } else {
+            shape2 = {1, 360, 640, 16};
+        }
+        ov::Tensor t2 = ov::test::utils::create_and_fill_tensor(
+                model->input().get_element_type(), shape2, 50, 0);
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(setInputInferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                                       t2, tag + "_v2_shape_change"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - recording"), std::string::npos)
+                << tag << ": expected recording log when input shape changes";
+        }
+    }
+}
+
+// ── V2 MemRef reuse: output pointer change ─────────────────────────────────────
+//
+// Verifies that changing the output tensor triggers re-recording (not reuse)
+// even when the input tensor is unchanged.  This also exercises the code path
+// where vm_runtime must correctly reset output dirty bits (as opposed to the
+// known bug where it used pInputs instead of pOutputs for output dirty-bit
+// reset — if that bug were present every inference would incorrectly re-record).
+TEST_P(InferWithHostCompileTests, V2_MemRefReuse_OutputPtrChange) {
+    SKIP_IF_CURRENT_TEST_IS_DISABLED()
+    if (!isTargetDevice) {
+        GTEST_SKIP() << "Skip test for current device";
+    }
+
+    core->set_property("NPU", ov::log::level(ov::log::Level::DEBUG));
+
+    for (bool sharedQueue : {true, false}) {
+        ov::AnyMap cfg = configuration;
+        cfg[ov::intel_npu::shared_common_queue.name()] = sharedQueue;
+
+        auto model = createModelByName(selectedModelName);
+        RuntimeCompareSetupResult setupResult;
+        {
+            auto savedCfg = configuration;
+            configuration = cfg;
+            setupResult = prepareRuntimeCompareContext(model);
+            configuration = savedCfg;
+        }
+        if (setupResult.status == RuntimeCompareStatus::fail) {
+            FAIL() << "shared=" << sharedQueue << ": " << setupResult.message;
+        }
+        if (setupResult.status == RuntimeCompareStatus::skip) {
+            GTEST_SKIP() << setupResult.message;
+        }
+        auto& ctx = setupResult.context;
+        const std::string tag = sharedQueue ? "shared" : "nonshared";
+
+        ov::Shape shape;
+        if (selectedModelName == "MaxPool_NCHW") {
+            shape = {1, 16, 720, 1280};
+        } else {
+            shape = {1, 720, 1280, 16};
+        }
+        ov::Tensor inTensor = ov::test::utils::create_and_fill_tensor(
+                model->input().get_element_type(), shape, 100, 0);
+
+        // 1st inference: recording expected
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(setInputInferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                                       inTensor, tag + "_v2out_first"));
+            const std::string logs = logCapture.str();
+            if (logs.find("execute_vm_runtime_v2 - started") == std::string::npos) {
+                GTEST_SKIP() << "V2 API not active for shared=" << sharedQueue << ", skipping";
+            }
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - recording"), std::string::npos)
+                << tag << ": expected recording log on first inference";
+        }
+
+        // 2nd inference: same input, no output change → reuse
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(inferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                               tag + "_v2out_input_reuse"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - reuse, no tensor change detected"), std::string::npos)
+                << tag << ": expected reuse log when nothing changed";
+        }
+
+        // 3rd inference: set a new output tensor (different pointer, same shape) → recording
+        const auto outputShape = ctx.reqDynamic.get_tensor(model->output()).get_shape();
+        auto zeroCtx = core->get_default_context(target_device);
+        auto newOutputTensor = zeroCtx.create_host_tensor(model->output().get_element_type(), outputShape);
+        OV_ASSERT_NO_THROW(ctx.reqDynamic.set_tensor(model->output(), newOutputTensor));
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(inferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                               tag + "_v2out_output_ptr_change"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - recording"), std::string::npos)
+                << tag << ": expected recording log when output pointer changes";
+        }
+
+        // 4th inference: same output tensor again → reuse (validates output dirty bits are cleared)
+        {
+            ScopedLogCapture logCapture;
+            OV_ASSERT_NO_THROW(inferAndCompare(model, ctx.reqDynamic, ctx.reqReference,
+                                               tag + "_v2out_output_ptr_reuse"));
+            const std::string logs = logCapture.str();
+            ASSERT_NE(logs.find("execute_vm_runtime_v2 - reuse, no tensor change detected"), std::string::npos)
+                << tag << ": expected reuse log when same output tensor is reused";
+        }
+    }
+}
+
 }  // namespace behavior
 }  // namespace test
 }  // namespace ov

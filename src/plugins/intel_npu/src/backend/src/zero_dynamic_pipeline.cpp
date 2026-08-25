@@ -422,6 +422,9 @@ void DynamicPipeline::execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
                                             const npu_vm_runtime_config_desc_t* pConfig) {
     _logger.debug("execute_vm_runtime_v2 - started");
 
+    const bool firstInference = !args._commandListsRecorded;
+    bool noTensorChange = true;
+
     auto processMemRefs = [&](auto& memRefs, auto& targetHandles) {
         targetHandles.clear();
         targetHandles.reserve(memRefs.size());
@@ -431,13 +434,22 @@ void DynamicPipeline::execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
                 impl = std::make_shared<MemRefTypeImpl>();
                 memref._impl = impl;
             }
-            impl->UpdateMemRefHandleStatus(memref, true);
+            const bool memRefUpdated = impl->UpdateMemRefHandleStatus(memref, true);
+            if (memRefUpdated) {
+                noTensorChange = false;
+            }
             targetHandles.push_back(impl->_memRef);
         }
     };
 
     processMemRefs(args._inputsMemRef, args._inputMemRefHandles);
     processMemRefs(args._outputsMemRef, args._outputMemRefHandles);
+
+    if (!firstInference && noTensorChange) {
+        _logger.debug("execute_vm_runtime_v2 - reuse, no tensor change detected");
+    } else {
+        _logger.debug("execute_vm_runtime_v2 - recording");
+    }
 
     auto& params = args._executeParams2;
     params.commandQueue = commandQueue;
@@ -454,6 +466,7 @@ void DynamicPipeline::execute_vm_runtime_v2(npu_vm_runtime_handle_t vmRuntime,
         OPENVINO_THROW("Failed to execute VM runtime engine (v2), error code: ", result);
     }
 
+    args._commandListsRecorded = true;
     _logger.debug("execute_vm_runtime_v2 - completed");
 }
 
